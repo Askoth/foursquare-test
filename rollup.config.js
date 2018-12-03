@@ -14,7 +14,7 @@ export default {
         buble(),
     ],
     output: {
-        file: './sample/js/index.js',
+        file: './docs/js/index.js',
         format: 'iife'
     }
 }
