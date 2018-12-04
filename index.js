@@ -1,7 +1,12 @@
 const axios = require('axios');
 const {SECRET_ID} = require('./secret.js');
 
+const url = require('url');
+const path = require('path');
 const fs = require('fs');
+// cache html on server restart
+// a smart solution for both js and html could've been created
+// removing cache on dev env
 const html = fs.readFileSync('./dist/index.html');
 
 const express = require('express');
@@ -10,8 +15,9 @@ const port = 8000;
 
 app.get('/', (req, res) => res.send(html.toString('utf8')));
 
-app.get('/js/index.js', (req, res) => {
-    const js = fs.readFileSync('./dist/js/index.js');
+app.get('/**/*.js', (req, res) => {
+    const {pathname} = url.parse(req.url);
+    const js = fs.readFileSync(path.join('dist', pathname));
     res.send(js.toString('utf8'))
 });
 
@@ -24,10 +30,11 @@ app.get('/token', (req, res) => {
     } = req.query;
 
     axios.get(fourSquareTokenUrl ({ client_id, redirect_uri, code })).then((tokenRes) => {
+        console.log(tokenRes.data)
         res.send(JSON.stringify(tokenRes.data))
     }).catch(function (err) {
         res.status(500)
-        res.send(err)
+        res.send(err.message)
     })
 });
 

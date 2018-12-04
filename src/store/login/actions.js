@@ -11,7 +11,7 @@ export default {
                 // deal with error
             }
 
-            console.log(res.data.token);
+            console.log(res.data.access_token);
         })
     }
 }

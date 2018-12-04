@@ -10532,7 +10532,7 @@
   /***/ })
   /******/ ])
   });
-
+  //# sourceMappingURL=axios.map
   });
 
   var actions = {
@@ -10544,7 +10544,7 @@
               url: getters.tokenUrl
           }).then(function (res, err) {
 
-              console.log(res.data.token);
+              console.log(res.data.access_token);
           });
       }
   };
