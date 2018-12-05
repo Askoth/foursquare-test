@@ -1,0 +1,52 @@
+<template>
+    <div>
+        <ul v-if="venuesFormatted.length > 0">
+            <li
+                v-for="venue in venuesFormatted"
+            >
+                <dl>
+                    <dt>Name</dt>
+                    <dd>{{ venue.name }}</dd>
+
+                    <dt>Address</dt>
+                    <dd>
+                        <p v-for="addressLine in venue.formattedAddress">
+                            {{ addressLine }}
+                        </p>
+                    </dd>
+
+                    <dt>Photos</dt>
+                    <dd>{{ venue.photos }}</dd>
+                </dl>
+            </li>
+        </ul>
+        <p v-else>
+            No results yet
+        </p>
+    </div>
+</template>
+
+<script>
+import { mapGetters } from 'vuex';
+
+export default {
+    computed: {
+        ...mapGetters('foursquare', ['displayVenues']),
+        venuesFormatted() {
+            const result = this.displayVenues.map((venue) => {
+                const { location, name, photos } = venue;
+
+                return {
+                    name,
+                    photos,
+                    formattedAddress: location.formattedAddress
+                }
+            })
+
+            return result
+        }
+    }
+
+}
+
+</script>

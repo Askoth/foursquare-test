@@ -366,12 +366,12 @@
     /**
      * Show production mode tip message on boot?
      */
-    productionTip: "production" !== 'production',
+    productionTip: "development" !== 'production',
 
     /**
      * Whether to enable devtools
      */
-    devtools: "production" !== 'production',
+    devtools: "development" !== 'production',
 
     /**
      * Whether to record perf
@@ -570,6 +570,96 @@
   /*  */
 
   var warn = noop;
+  var tip = noop;
+  var generateComponentTrace = (noop); // work around flow check
+  var formatComponentName = (noop);
+
+  {
+    var hasConsole = typeof console !== 'undefined';
+    var classifyRE = /(?:^|[-_])(\w)/g;
+    var classify = function (str) { return str
+      .replace(classifyRE, function (c) { return c.toUpperCase(); })
+      .replace(/[-_]/g, ''); };
+
+    warn = function (msg, vm) {
+      var trace = vm ? generateComponentTrace(vm) : '';
+
+      if (config.warnHandler) {
+        config.warnHandler.call(null, msg, vm, trace);
+      } else if (hasConsole && (!config.silent)) {
+        console.error(("[Vue warn]: " + msg + trace));
+      }
+    };
+
+    tip = function (msg, vm) {
+      if (hasConsole && (!config.silent)) {
+        console.warn("[Vue tip]: " + msg + (
+          vm ? generateComponentTrace(vm) : ''
+        ));
+      }
+    };
+
+    formatComponentName = function (vm, includeFile) {
+      if (vm.$root === vm) {
+        return '<Root>'
+      }
+      var options = typeof vm === 'function' && vm.cid != null
+        ? vm.options
+        : vm._isVue
+          ? vm.$options || vm.constructor.options
+          : vm || {};
+      var name = options.name || options._componentTag;
+      var file = options.__file;
+      if (!name && file) {
+        var match = file.match(/([^/\\]+)\.vue$/);
+        name = match && match[1];
+      }
+
+      return (
+        (name ? ("<" + (classify(name)) + ">") : "<Anonymous>") +
+        (file && includeFile !== false ? (" at " + file) : '')
+      )
+    };
+
+    var repeat = function (str, n) {
+      var res = '';
+      while (n) {
+        if (n % 2 === 1) { res += str; }
+        if (n > 1) { str += str; }
+        n >>= 1;
+      }
+      return res
+    };
+
+    generateComponentTrace = function (vm) {
+      if (vm._isVue && vm.$parent) {
+        var tree = [];
+        var currentRecursiveSequence = 0;
+        while (vm) {
+          if (tree.length > 0) {
+            var last = tree[tree.length - 1];
+            if (last.constructor === vm.constructor) {
+              currentRecursiveSequence++;
+              vm = vm.$parent;
+              continue
+            } else if (currentRecursiveSequence > 0) {
+              tree[tree.length - 1] = [last, currentRecursiveSequence];
+              currentRecursiveSequence = 0;
+            }
+          }
+          tree.push(vm);
+          vm = vm.$parent;
+        }
+        return '\n\nfound in\n\n' + tree
+          .map(function (vm, i) { return ("" + (i === 0 ? '---> ' : repeat(' ', 5 + i * 2)) + (Array.isArray(vm)
+              ? ((formatComponentName(vm[0])) + "... (" + (vm[1]) + " recursive calls)")
+              : formatComponentName(vm))); })
+          .join('\n')
+      } else {
+        return ("\n\n(found in " + (formatComponentName(vm)) + ")")
+      }
+    };
+  }
 
   /*  */
 
@@ -912,6 +1002,10 @@
         if (newVal === value || (newVal !== newVal && value !== value)) {
           return
         }
+        /* eslint-enable no-self-compare */
+        if (customSetter) {
+          customSetter();
+        }
         if (setter) {
           setter.call(obj, newVal);
         } else {
@@ -929,6 +1023,10 @@
    * already exist.
    */
   function set (target, key, val) {
+    if (isUndef(target) || isPrimitive(target)
+    ) {
+      warn(("Cannot set reactive property on undefined, null, or primitive value: " + ((target))));
+    }
     if (Array.isArray(target) && isValidArrayIndex(key)) {
       target.length = Math.max(target.length, key);
       target.splice(key, 1, val);
@@ -940,6 +1038,10 @@
     }
     var ob = (target).__ob__;
     if (target._isVue || (ob && ob.vmCount)) {
+      warn(
+        'Avoid adding reactive properties to a Vue instance or its root $data ' +
+        'at runtime - declare it upfront in the data option.'
+      );
       return val
     }
     if (!ob) {
@@ -955,12 +1057,20 @@
    * Delete a property and trigger change if necessary.
    */
   function del (target, key) {
+    if (isUndef(target) || isPrimitive(target)
+    ) {
+      warn(("Cannot delete reactive property on undefined, null, or primitive value: " + ((target))));
+    }
     if (Array.isArray(target) && isValidArrayIndex(key)) {
       target.splice(key, 1);
       return
     }
     var ob = (target).__ob__;
     if (target._isVue || (ob && ob.vmCount)) {
+      warn(
+        'Avoid deleting properties on a Vue instance or its root $data ' +
+        '- just set it to null.'
+      );
       return
     }
     if (!hasOwn(target, key)) {
@@ -995,6 +1105,21 @@
    * value into the final value.
    */
   var strats = config.optionMergeStrategies;
+
+  /**
+   * Options with restrictions
+   */
+  {
+    strats.el = strats.propsData = function (parent, child, vm, key) {
+      if (!vm) {
+        warn(
+          "option \"" + key + "\" can only be used during instance " +
+          'creation with the `new` keyword.'
+        );
+      }
+      return defaultStrat(parent, child)
+    };
+  }
 
   /**
    * Helper that recursively merges two data objects together.
@@ -1068,6 +1193,12 @@
   ) {
     if (!vm) {
       if (childVal && typeof childVal !== 'function') {
+        warn(
+          'The "data" option should be a function ' +
+          'that returns a per-instance value in component ' +
+          'definitions.',
+          vm
+        );
 
         return parentVal
       }
@@ -1112,6 +1243,7 @@
   ) {
     var res = Object.create(parentVal || null);
     if (childVal) {
+      assertObjectType(key, childVal, vm);
       return extend(res, childVal)
     } else {
       return res
@@ -1139,6 +1271,9 @@
     if (childVal === nativeWatch) { childVal = undefined; }
     /* istanbul ignore if */
     if (!childVal) { return Object.create(parentVal || null) }
+    {
+      assertObjectType(key, childVal, vm);
+    }
     if (!parentVal) { return childVal }
     var ret = {};
     extend(ret, parentVal);
@@ -1167,7 +1302,7 @@
     vm,
     key
   ) {
-    if (childVal && "production" !== 'production') {
+    if (childVal && "development" !== 'production') {
       assertObjectType(key, childVal, vm);
     }
     if (!parentVal) { return childVal }
@@ -1188,6 +1323,31 @@
   };
 
   /**
+   * Validate component names
+   */
+  function checkComponents (options) {
+    for (var key in options.components) {
+      validateComponentName(key);
+    }
+  }
+
+  function validateComponentName (name) {
+    if (!/^[a-zA-Z][\w-]*$/.test(name)) {
+      warn(
+        'Invalid component name: "' + name + '". Component names ' +
+        'can only contain alphanumeric characters and the hyphen, ' +
+        'and must start with a letter.'
+      );
+    }
+    if (isBuiltInTag(name) || config.isReservedTag(name)) {
+      warn(
+        'Do not use built-in or reserved HTML elements as component ' +
+        'id: ' + name
+      );
+    }
+  }
+
+  /**
    * Ensure all props option syntax are normalized into the
    * Object-based format.
    */
@@ -1203,6 +1363,8 @@
         if (typeof val === 'string') {
           name = camelize(val);
           res[name] = { type: null };
+        } else {
+          warn('props must be strings when using array syntax.');
         }
       }
     } else if (isPlainObject(props)) {
@@ -1213,6 +1375,12 @@
           ? val
           : { type: val };
       }
+    } else {
+      warn(
+        "Invalid value for option \"props\": expected an Array or an Object, " +
+        "but got " + (toRawType(props)) + ".",
+        vm
+      );
     }
     options.props = res;
   }
@@ -1235,6 +1403,12 @@
           ? extend({ from: key }, val)
           : { from: val };
       }
+    } else {
+      warn(
+        "Invalid value for option \"inject\": expected an Array or an Object, " +
+        "but got " + (toRawType(inject)) + ".",
+        vm
+      );
     }
   }
 
@@ -1272,6 +1446,9 @@
     child,
     vm
   ) {
+    {
+      checkComponents(child);
+    }
 
     if (typeof child === 'function') {
       child = child.options;
@@ -1330,6 +1507,12 @@
     if (hasOwn(assets, PascalCaseId)) { return assets[PascalCaseId] }
     // fallback to prototype chain
     var res = assets[id] || assets[camelizedId] || assets[PascalCaseId];
+    if (warnMissing && !res) {
+      warn(
+        'Failed to resolve ' + type.slice(0, -1) + ': ' + id,
+        options
+      );
+    }
     return res
   }
 
@@ -1368,6 +1551,9 @@
       observe(value);
       toggleObserving(prevShouldObserve);
     }
+    {
+      assertProp(prop, key, value, vm, absent);
+    }
     return value
   }
 
@@ -1380,6 +1566,15 @@
       return undefined
     }
     var def = prop.default;
+    // warn against non-factory defaults for Object & Array
+    if (isObject(def)) {
+      warn(
+        'Invalid default value for prop "' + key + '": ' +
+        'Props with type Object/Array must use a factory function ' +
+        'to return the default value.',
+        vm
+      );
+    }
     // the raw prop value was also undefined from previous render,
     // return previous default value to avoid unnecessary watcher trigger
     if (vm && vm.$options.propsData &&
@@ -1393,6 +1588,84 @@
     return typeof def === 'function' && getType(prop.type) !== 'Function'
       ? def.call(vm)
       : def
+  }
+
+  /**
+   * Assert whether a prop is valid.
+   */
+  function assertProp (
+    prop,
+    name,
+    value,
+    vm,
+    absent
+  ) {
+    if (prop.required && absent) {
+      warn(
+        'Missing required prop: "' + name + '"',
+        vm
+      );
+      return
+    }
+    if (value == null && !prop.required) {
+      return
+    }
+    var type = prop.type;
+    var valid = !type || type === true;
+    var expectedTypes = [];
+    if (type) {
+      if (!Array.isArray(type)) {
+        type = [type];
+      }
+      for (var i = 0; i < type.length && !valid; i++) {
+        var assertedType = assertType(value, type[i]);
+        expectedTypes.push(assertedType.expectedType || '');
+        valid = assertedType.valid;
+      }
+    }
+    if (!valid) {
+      warn(
+        "Invalid prop: type check failed for prop \"" + name + "\"." +
+        " Expected " + (expectedTypes.map(capitalize).join(', ')) +
+        ", got " + (toRawType(value)) + ".",
+        vm
+      );
+      return
+    }
+    var validator = prop.validator;
+    if (validator) {
+      if (!validator(value)) {
+        warn(
+          'Invalid prop: custom validator check failed for prop "' + name + '".',
+          vm
+        );
+      }
+    }
+  }
+
+  var simpleCheckRE = /^(String|Number|Boolean|Function|Symbol)$/;
+
+  function assertType (value, type) {
+    var valid;
+    var expectedType = getType(type);
+    if (simpleCheckRE.test(expectedType)) {
+      var t = typeof value;
+      valid = t === expectedType.toLowerCase();
+      // for primitive wrapper objects
+      if (!valid && t === 'object') {
+        valid = value instanceof type;
+      }
+    } else if (expectedType === 'Object') {
+      valid = isPlainObject(value);
+    } else if (expectedType === 'Array') {
+      valid = Array.isArray(value);
+    } else {
+      valid = value instanceof type;
+    }
+    return {
+      valid: valid,
+      expectedType: expectedType
+    }
   }
 
   /**
@@ -1455,6 +1728,9 @@
   }
 
   function logError (err, vm, info) {
+    {
+      warn(("Error in " + info + ": \"" + (err.toString()) + "\""), vm);
+    }
     /* istanbul ignore else */
     if ((inBrowser || inWeex) && typeof console !== 'undefined') {
       console.error(err);
@@ -1579,6 +1855,83 @@
 
   /*  */
 
+  /* not type checking this file because flow doesn't play well with Proxy */
+
+  var initProxy;
+
+  {
+    var allowedGlobals = makeMap(
+      'Infinity,undefined,NaN,isFinite,isNaN,' +
+      'parseFloat,parseInt,decodeURI,decodeURIComponent,encodeURI,encodeURIComponent,' +
+      'Math,Number,Date,Array,Object,Boolean,String,RegExp,Map,Set,JSON,Intl,' +
+      'require' // for Webpack/Browserify
+    );
+
+    var warnNonPresent = function (target, key) {
+      warn(
+        "Property or method \"" + key + "\" is not defined on the instance but " +
+        'referenced during render. Make sure that this property is reactive, ' +
+        'either in the data option, or for class-based components, by ' +
+        'initializing the property. ' +
+        'See: https://vuejs.org/v2/guide/reactivity.html#Declaring-Reactive-Properties.',
+        target
+      );
+    };
+
+    var hasProxy =
+      typeof Proxy !== 'undefined' && isNative(Proxy);
+
+    if (hasProxy) {
+      var isBuiltInModifier = makeMap('stop,prevent,self,ctrl,shift,alt,meta,exact');
+      config.keyCodes = new Proxy(config.keyCodes, {
+        set: function set (target, key, value) {
+          if (isBuiltInModifier(key)) {
+            warn(("Avoid overwriting built-in modifier in config.keyCodes: ." + key));
+            return false
+          } else {
+            target[key] = value;
+            return true
+          }
+        }
+      });
+    }
+
+    var hasHandler = {
+      has: function has (target, key) {
+        var has = key in target;
+        var isAllowed = allowedGlobals(key) || key.charAt(0) === '_';
+        if (!has && !isAllowed) {
+          warnNonPresent(target, key);
+        }
+        return has || !isAllowed
+      }
+    };
+
+    var getHandler = {
+      get: function get (target, key) {
+        if (typeof key === 'string' && !(key in target)) {
+          warnNonPresent(target, key);
+        }
+        return target[key]
+      }
+    };
+
+    initProxy = function initProxy (vm) {
+      if (hasProxy) {
+        // determine which proxy handler to use
+        var options = vm.$options;
+        var handlers = options.render && options.render._withStripped
+          ? getHandler
+          : hasHandler;
+        vm._renderProxy = new Proxy(vm, handlers);
+      } else {
+        vm._renderProxy = vm;
+      }
+    };
+  }
+
+  /*  */
+
   var seenObjects = new _Set();
 
   /**
@@ -1611,6 +1964,29 @@
       keys = Object.keys(val);
       i = keys.length;
       while (i--) { _traverse(val[keys[i]], seen); }
+    }
+  }
+
+  var mark;
+  var measure;
+
+  {
+    var perf = inBrowser && window.performance;
+    /* istanbul ignore if */
+    if (
+      perf &&
+      perf.mark &&
+      perf.measure &&
+      perf.clearMarks &&
+      perf.clearMeasures
+    ) {
+      mark = function (tag) { return perf.mark(tag); };
+      measure = function (name, startTag, endTag) {
+        perf.measure(name, startTag, endTag);
+        perf.clearMarks(startTag);
+        perf.clearMarks(endTag);
+        perf.clearMeasures(name);
+      };
     }
   }
 
@@ -1663,7 +2039,12 @@
       old = oldOn[name];
       event = normalizeEvent(name);
       /* istanbul ignore if */
-      if (isUndef(cur)) ; else if (isUndef(old)) {
+      if (isUndef(cur)) {
+        warn(
+          "Invalid handler for event \"" + (event.name) + "\": got " + String(cur),
+          vm
+        );
+      } else if (isUndef(old)) {
         if (isUndef(cur.fns)) {
           cur = on[name] = createFnInvoker(cur);
         }
@@ -1736,6 +2117,22 @@
     if (isDef(attrs) || isDef(props)) {
       for (var key in propOptions) {
         var altKey = hyphenate(key);
+        {
+          var keyInLowerCase = key.toLowerCase();
+          if (
+            key !== keyInLowerCase &&
+            attrs && hasOwn(attrs, keyInLowerCase)
+          ) {
+            tip(
+              "Prop \"" + keyInLowerCase + "\" is passed to component " +
+              (formatComponentName(tag || Ctor)) + ", but the declared prop name is" +
+              " \"" + key + "\". " +
+              "Note that HTML attributes are case-insensitive and camelCased " +
+              "props need to use their kebab-case equivalents when using in-DOM " +
+              "templates. You should probably use \"" + altKey + "\" instead of \"" + key + "\"."
+            );
+          }
+        }
         checkProp(res, props, key, altKey, true) ||
         checkProp(res, attrs, key, altKey, false);
       }
@@ -1923,6 +2320,10 @@
       });
 
       var reject = once(function (reason) {
+        warn(
+          "Failed to resolve async component: " + (String(factory)) +
+          (reason ? ("\nReason: " + reason) : '')
+        );
         if (isDef(factory.errorComp)) {
           factory.error = true;
           forceRender();
@@ -1962,7 +2363,7 @@
             setTimeout(function () {
               if (isUndef(factory.resolved)) {
                 reject(
-                  null
+                  "timeout (" + (res.timeout) + "ms)"
                 );
               }
             }, res.timeout);
@@ -2109,6 +2510,18 @@
 
     Vue.prototype.$emit = function (event) {
       var vm = this;
+      {
+        var lowerCaseEvent = event.toLowerCase();
+        if (lowerCaseEvent !== event && vm._events[lowerCaseEvent]) {
+          tip(
+            "Event \"" + lowerCaseEvent + "\" is emitted in component " +
+            (formatComponentName(vm)) + " but the handler is registered for \"" + event + "\". " +
+            "Note that HTML attributes are case-insensitive and you cannot use " +
+            "v-on to listen to camelCase events when using in-DOM templates. " +
+            "You should probably use \"" + (hyphenate(event)) + "\" instead of \"" + event + "\"."
+          );
+        }
+      }
       var cbs = vm._events[event];
       if (cbs) {
         cbs = cbs.length > 1 ? toArray(cbs) : cbs;
@@ -2194,6 +2607,7 @@
   /*  */
 
   var activeInstance = null;
+  var isUpdatingChildComponent = false;
 
   function initLifecycle (vm) {
     var options = vm.$options;
@@ -2323,12 +2737,46 @@
     vm.$el = el;
     if (!vm.$options.render) {
       vm.$options.render = createEmptyVNode;
+      {
+        /* istanbul ignore if */
+        if ((vm.$options.template && vm.$options.template.charAt(0) !== '#') ||
+          vm.$options.el || el) {
+          warn(
+            'You are using the runtime-only build of Vue where the template ' +
+            'compiler is not available. Either pre-compile the templates into ' +
+            'render functions, or use the compiler-included build.',
+            vm
+          );
+        } else {
+          warn(
+            'Failed to mount component: template or render function not defined.',
+            vm
+          );
+        }
+      }
     }
     callHook(vm, 'beforeMount');
 
     var updateComponent;
     /* istanbul ignore if */
-    {
+    if (config.performance && mark) {
+      updateComponent = function () {
+        var name = vm._name;
+        var id = vm._uid;
+        var startTag = "vue-perf-start:" + id;
+        var endTag = "vue-perf-end:" + id;
+
+        mark(startTag);
+        var vnode = vm._render();
+        mark(endTag);
+        measure(("vue " + name + " render"), startTag, endTag);
+
+        mark(startTag);
+        vm._update(vnode, hydrating);
+        mark(endTag);
+        measure(("vue " + name + " patch"), startTag, endTag);
+      };
+    } else {
       updateComponent = function () {
         vm._update(vm._render(), hydrating);
       };
@@ -2356,6 +2804,9 @@
     parentVnode,
     renderChildren
   ) {
+    {
+      isUpdatingChildComponent = true;
+    }
 
     // determine whether component has slot children
     // we need to do this before overwriting $options._renderChildren
@@ -2405,6 +2856,10 @@
     if (hasChildren) {
       vm.$slots = resolveSlots(renderChildren, parentVnode.context);
       vm.$forceUpdate();
+    }
+
+    {
+      isUpdatingChildComponent = false;
     }
   }
 
@@ -2468,9 +2923,15 @@
     popTarget();
   }
 
+  /*  */
+
+
+  var MAX_UPDATE_COUNT = 100;
+
   var queue = [];
   var activatedChildren = [];
   var has = {};
+  var circular = {};
   var waiting = false;
   var flushing = false;
   var index = 0;
@@ -2481,6 +2942,9 @@
   function resetSchedulerState () {
     index = queue.length = activatedChildren.length = 0;
     has = {};
+    {
+      circular = {};
+    }
     waiting = flushing = false;
   }
 
@@ -2508,6 +2972,21 @@
       id = watcher.id;
       has[id] = null;
       watcher.run();
+      // in dev build, check and stop circular updates.
+      if (has[id] != null) {
+        circular[id] = (circular[id] || 0) + 1;
+        if (circular[id] > MAX_UPDATE_COUNT) {
+          warn(
+            'You may have an infinite update loop ' + (
+              watcher.user
+                ? ("in watcher with expression \"" + (watcher.expression) + "\"")
+                : "in a component render function."
+            ),
+            watcher.vm
+          );
+          break
+        }
+      }
     }
 
     // keep copies of post queues before resetting state
@@ -2622,7 +3101,7 @@
     this.newDeps = [];
     this.depIds = new _Set();
     this.newDepIds = new _Set();
-    this.expression = '';
+    this.expression = expOrFn.toString();
     // parse expression for getter
     if (typeof expOrFn === 'function') {
       this.getter = expOrFn;
@@ -2630,6 +3109,12 @@
       this.getter = parsePath(expOrFn);
       if (!this.getter) {
         this.getter = function () {};
+        warn(
+          "Failed watching path: \"" + expOrFn + "\" " +
+          'Watcher only accepts simple dot-delimited paths. ' +
+          'For full control, use a function instead.',
+          vm
+        );
       }
     }
     this.value = this.lazy
@@ -2840,7 +3325,25 @@
       var value = validateProp(key, propsOptions, propsData, vm);
       /* istanbul ignore else */
       {
-        defineReactive(props, key, value);
+        var hyphenatedKey = hyphenate(key);
+        if (isReservedAttribute(hyphenatedKey) ||
+            config.isReservedAttr(hyphenatedKey)) {
+          warn(
+            ("\"" + hyphenatedKey + "\" is a reserved attribute and cannot be used as component prop."),
+            vm
+          );
+        }
+        defineReactive(props, key, value, function () {
+          if (vm.$parent && !isUpdatingChildComponent) {
+            warn(
+              "Avoid mutating a prop directly since the value will be " +
+              "overwritten whenever the parent component re-renders. " +
+              "Instead, use a data or computed property based on the prop's " +
+              "value. Prop being mutated: \"" + key + "\"",
+              vm
+            );
+          }
+        });
       }
       // static props are already proxied on the component's prototype
       // during Vue.extend(). We only need to proxy props defined at
@@ -2861,6 +3364,11 @@
       : data || {};
     if (!isPlainObject(data)) {
       data = {};
+      warn(
+        'data functions should return an object:\n' +
+        'https://vuejs.org/v2/guide/components.html#data-Must-Be-a-Function',
+        vm
+      );
     }
     // proxy data on instance
     var keys = Object.keys(data);
@@ -2869,7 +3377,21 @@
     var i = keys.length;
     while (i--) {
       var key = keys[i];
-      if (props && hasOwn(props, key)) ; else if (!isReserved(key)) {
+      {
+        if (methods && hasOwn(methods, key)) {
+          warn(
+            ("Method \"" + key + "\" has already been defined as a data property."),
+            vm
+          );
+        }
+      }
+      if (props && hasOwn(props, key)) {
+        warn(
+          "The data property \"" + key + "\" is already declared as a prop. " +
+          "Use prop default value instead.",
+          vm
+        );
+      } else if (!isReserved(key)) {
         proxy(vm, "_data", key);
       }
     }
@@ -2901,6 +3423,12 @@
     for (var key in computed) {
       var userDef = computed[key];
       var getter = typeof userDef === 'function' ? userDef : userDef.get;
+      if (getter == null) {
+        warn(
+          ("Getter is missing for computed property \"" + key + "\"."),
+          vm
+        );
+      }
 
       if (!isSSR) {
         // create internal watcher for the computed property.
@@ -2917,6 +3445,12 @@
       // at instantiation here.
       if (!(key in vm)) {
         defineComputed(vm, key, userDef);
+      } else {
+        if (key in vm.$data) {
+          warn(("The computed property \"" + key + "\" is already defined in data."), vm);
+        } else if (vm.$options.props && key in vm.$options.props) {
+          warn(("The computed property \"" + key + "\" is already defined as a prop."), vm);
+        }
       }
     }
   }
@@ -2942,6 +3476,14 @@
         ? userDef.set
         : noop;
     }
+    if (sharedPropertyDefinition.set === noop) {
+      sharedPropertyDefinition.set = function () {
+        warn(
+          ("Computed property \"" + key + "\" was assigned to but it has no setter."),
+          this
+        );
+      };
+    }
     Object.defineProperty(target, key, sharedPropertyDefinition);
   }
 
@@ -2963,6 +3505,27 @@
   function initMethods (vm, methods) {
     var props = vm.$options.props;
     for (var key in methods) {
+      {
+        if (methods[key] == null) {
+          warn(
+            "Method \"" + key + "\" has an undefined value in the component definition. " +
+            "Did you reference the function correctly?",
+            vm
+          );
+        }
+        if (props && hasOwn(props, key)) {
+          warn(
+            ("Method \"" + key + "\" has already been defined as a prop."),
+            vm
+          );
+        }
+        if ((key in vm) && isReserved(key)) {
+          warn(
+            "Method \"" + key + "\" conflicts with an existing Vue instance method. " +
+            "Avoid defining component methods that start with _ or $."
+          );
+        }
+      }
       vm[key] = methods[key] == null ? noop : bind(methods[key], vm);
     }
   }
@@ -3004,6 +3567,18 @@
     dataDef.get = function () { return this._data };
     var propsDef = {};
     propsDef.get = function () { return this._props };
+    {
+      dataDef.set = function (newData) {
+        warn(
+          'Avoid replacing instance root $data. ' +
+          'Use nested data properties instead.',
+          this
+        );
+      };
+      propsDef.set = function () {
+        warn("$props is readonly.", this);
+      };
+    }
     Object.defineProperty(Vue.prototype, '$data', dataDef);
     Object.defineProperty(Vue.prototype, '$props', propsDef);
 
@@ -3049,7 +3624,14 @@
       Object.keys(result).forEach(function (key) {
         /* istanbul ignore else */
         {
-          defineReactive(vm, key, result[key]);
+          defineReactive(vm, key, result[key], function () {
+            warn(
+              "Avoid mutating an injected value directly since the changes will be " +
+              "overwritten whenever the provided component re-renders. " +
+              "injection being mutated: \"" + key + "\"",
+              vm
+            );
+          });
         }
       });
       toggleObserving(true);
@@ -3084,6 +3666,8 @@
             result[key] = typeof provideDefault === 'function'
               ? provideDefault.call(vm)
               : provideDefault;
+          } else {
+            warn(("Injection \"" + key + "\" not found"), vm);
           }
         }
       }
@@ -3141,6 +3725,12 @@
     if (scopedSlotFn) { // scoped slot
       props = props || {};
       if (bindObject) {
+        if (!isObject(bindObject)) {
+          warn(
+            'slot v-bind without argument expects an Object',
+            this
+          );
+        }
         props = extend(extend({}, bindObject), props);
       }
       nodes = scopedSlotFn(props) || fallback;
@@ -3148,6 +3738,13 @@
       var slotNodes = this.$slots[name];
       // warn duplicate slot usage
       if (slotNodes) {
+        if (slotNodes._rendered) {
+          warn(
+            "Duplicate presence of slot \"" + name + "\" found in the same render tree " +
+            "- this will likely cause render errors.",
+            this
+          );
+        }
         slotNodes._rendered = true;
       }
       nodes = slotNodes || fallback;
@@ -3215,7 +3812,12 @@
     isSync
   ) {
     if (value) {
-      if (!isObject(value)) ; else {
+      if (!isObject(value)) {
+        warn(
+          'v-bind without argument expects an Object or Array value',
+          this
+        );
+      } else {
         if (Array.isArray(value)) {
           value = toObject(value);
         }
@@ -3316,7 +3918,12 @@
 
   function bindObjectListeners (data, value) {
     if (value) {
-      if (!isPlainObject(value)) ; else {
+      if (!isPlainObject(value)) {
+        warn(
+          'v-on without argument expects an Object value',
+          this
+        );
+      } else {
         var on = data.on = data.on ? extend({}, data.on) : {};
         for (var key in value) {
           var existing = on[key];
@@ -3585,6 +4192,9 @@
     // if at this stage it's not a constructor or an async component factory,
     // reject.
     if (typeof Ctor !== 'function') {
+      {
+        warn(("Invalid Component definition: " + (String(Ctor))), context);
+      }
       return
     }
 
@@ -3741,6 +4351,11 @@
     normalizationType
   ) {
     if (isDef(data) && isDef((data).__ob__)) {
+      warn(
+        "Avoid using observed data object as vnode data: " + (JSON.stringify(data)) + "\n" +
+        'Always create fresh vnode data objects in each render!',
+        context
+      );
       return createEmptyVNode()
     }
     // object syntax in v-bind
@@ -3750,6 +4365,17 @@
     if (!tag) {
       // in case of component :is set to falsy value
       return createEmptyVNode()
+    }
+    // warn against non-primitive key
+    if (isDef(data) && isDef(data.key) && !isPrimitive(data.key)
+    ) {
+      {
+        warn(
+          'Avoid using non-primitive value as key, ' +
+          'use string/number value instead.',
+          context
+        );
+      }
     }
     // support single function children as default scoped slot
     if (Array.isArray(children) &&
@@ -3856,8 +4482,12 @@
 
     /* istanbul ignore else */
     {
-      defineReactive(vm, '$attrs', parentData && parentData.attrs || emptyObject, null, true);
-      defineReactive(vm, '$listeners', options._parentListeners || emptyObject, null, true);
+      defineReactive(vm, '$attrs', parentData && parentData.attrs || emptyObject, function () {
+        !isUpdatingChildComponent && warn("$attrs is readonly.", vm);
+      }, true);
+      defineReactive(vm, '$listeners', options._parentListeners || emptyObject, function () {
+        !isUpdatingChildComponent && warn("$listeners is readonly.", vm);
+      }, true);
     }
   }
 
@@ -3874,6 +4504,14 @@
       var ref = vm.$options;
       var render = ref.render;
       var _parentVnode = ref._parentVnode;
+
+      // reset _rendered flag on slots for duplicate slot check
+      {
+        for (var key in vm.$slots) {
+          // $flow-disable-line
+          vm.$slots[key]._rendered = false;
+        }
+      }
 
       if (_parentVnode) {
         vm.$scopedSlots = _parentVnode.data.scopedSlots || emptyObject;
@@ -3892,11 +4530,27 @@
         // or previous vnode to prevent render error causing blank component
         /* istanbul ignore else */
         {
-          vnode = vm._vnode;
+          if (vm.$options.renderError) {
+            try {
+              vnode = vm.$options.renderError.call(vm._renderProxy, vm.$createElement, e);
+            } catch (e) {
+              handleError(e, vm, "renderError");
+              vnode = vm._vnode;
+            }
+          } else {
+            vnode = vm._vnode;
+          }
         }
       }
       // return empty vnode in case the render function errored out
       if (!(vnode instanceof VNode)) {
+        if (Array.isArray(vnode)) {
+          warn(
+            'Multiple root nodes returned from render function. Render function ' +
+            'should return a single root node.',
+            vm
+          );
+        }
         vnode = createEmptyVNode();
       }
       // set parent
@@ -3915,6 +4569,14 @@
       // a uid
       vm._uid = uid$3++;
 
+      var startTag, endTag;
+      /* istanbul ignore if */
+      if (config.performance && mark) {
+        startTag = "vue-perf-start:" + (vm._uid);
+        endTag = "vue-perf-end:" + (vm._uid);
+        mark(startTag);
+      }
+
       // a flag to avoid this being observed
       vm._isVue = true;
       // merge options
@@ -3932,7 +4594,7 @@
       }
       /* istanbul ignore else */
       {
-        vm._renderProxy = vm;
+        initProxy(vm);
       }
       // expose real self
       vm._self = vm;
@@ -3944,6 +4606,13 @@
       initState(vm);
       initProvide(vm); // resolve provide after data/props
       callHook(vm, 'created');
+
+      /* istanbul ignore if */
+      if (config.performance && mark) {
+        vm._name = formatComponentName(vm, false);
+        mark(endTag);
+        measure(("vue " + (vm._name) + " init"), startTag, endTag);
+      }
 
       if (vm.$options.el) {
         vm.$mount(vm.$options.el);
@@ -4030,6 +4699,10 @@
   }
 
   function Vue (options) {
+    if (!(this instanceof Vue)
+    ) {
+      warn('Vue is a constructor and should be called with the `new` keyword');
+    }
     this._init(options);
   }
 
@@ -4094,6 +4767,9 @@
       }
 
       var name = extendOptions.name || Super.options.name;
+      if (name) {
+        validateComponentName(name);
+      }
 
       var Sub = function VueComponent (options) {
         this._init(options);
@@ -4173,6 +4849,10 @@
         if (!definition) {
           return this.options[type + 's'][id]
         } else {
+          /* istanbul ignore if */
+          if (type === 'component') {
+            validateComponentName(id);
+          }
           if (type === 'component' && isPlainObject(definition)) {
             definition.name = definition.name || id;
             definition = this.options._base.extend(definition);
@@ -4327,6 +5007,13 @@
     // config
     var configDef = {};
     configDef.get = function () { return config; };
+    {
+      configDef.set = function () {
+        warn(
+          'Do not replace the Vue.config object, set individual fields instead.'
+        );
+      };
+    }
     Object.defineProperty(Vue, 'config', configDef);
 
     // exposed util methods.
@@ -4587,6 +5274,9 @@
     if (typeof el === 'string') {
       var selected = document.querySelector(el);
       if (!selected) {
+        warn(
+          'Cannot find element: ' + el
+        );
         return document.createElement('div')
       }
       return selected
@@ -4802,6 +5492,24 @@
       }
     }
 
+    function isUnknownElement$$1 (vnode, inVPre) {
+      return (
+        !inVPre &&
+        !vnode.ns &&
+        !(
+          config.ignoredElements.length &&
+          config.ignoredElements.some(function (ignore) {
+            return isRegExp(ignore)
+              ? ignore.test(vnode.tag)
+              : ignore === vnode.tag
+          })
+        ) &&
+        config.isUnknownElement(vnode.tag)
+      )
+    }
+
+    var creatingElmInVPre = 0;
+
     function createElm (
       vnode,
       insertedVnodeQueue,
@@ -4829,6 +5537,19 @@
       var children = vnode.children;
       var tag = vnode.tag;
       if (isDef(tag)) {
+        {
+          if (data && data.pre) {
+            creatingElmInVPre++;
+          }
+          if (isUnknownElement$$1(vnode, creatingElmInVPre)) {
+            warn(
+              'Unknown custom element: <' + tag + '> - did you ' +
+              'register the component correctly? For recursive components, ' +
+              'make sure to provide the "name" option.',
+              vnode.context
+            );
+          }
+        }
 
         vnode.elm = vnode.ns
           ? nodeOps.createElementNS(vnode.ns, tag)
@@ -4842,6 +5563,10 @@
             invokeCreateHooks(vnode, insertedVnodeQueue);
           }
           insert(parentElm, vnode.elm, refElm);
+        }
+
+        if (data && data.pre) {
+          creatingElmInVPre--;
         }
       } else if (isTrue(vnode.isComment)) {
         vnode.elm = nodeOps.createComment(vnode.text);
@@ -4927,6 +5652,9 @@
 
     function createChildren (vnode, children, insertedVnodeQueue) {
       if (Array.isArray(children)) {
+        {
+          checkDuplicateKeys(children);
+        }
         for (var i = 0; i < children.length; ++i) {
           createElm(children[i], insertedVnodeQueue, vnode.elm, null, true, children, i);
         }
@@ -5058,6 +5786,10 @@
       // during leaving transitions
       var canMove = !removeOnly;
 
+      {
+        checkDuplicateKeys(newCh);
+      }
+
       while (oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
         if (isUndef(oldStartVnode)) {
           oldStartVnode = oldCh[++oldStartIdx]; // Vnode has been moved left
@@ -5107,6 +5839,24 @@
         addVnodes(parentElm, refElm, newCh, newStartIdx, newEndIdx, insertedVnodeQueue);
       } else if (newStartIdx > newEndIdx) {
         removeVnodes(parentElm, oldCh, oldStartIdx, oldEndIdx);
+      }
+    }
+
+    function checkDuplicateKeys (children) {
+      var seenKeys = {};
+      for (var i = 0; i < children.length; i++) {
+        var vnode = children[i];
+        var key = vnode.key;
+        if (isDef(key)) {
+          if (seenKeys[key]) {
+            warn(
+              ("Duplicate keys detected: '" + key + "'. This may cause an update error."),
+              vnode.context
+            );
+          } else {
+            seenKeys[key] = true;
+          }
+        }
       }
     }
 
@@ -5188,6 +5938,8 @@
         }
       }
     }
+
+    var hydrationBailed = false;
     // list of modules that can skip create hook during hydration because they
     // are already rendered on the client or has no need for initialization
     // Note: style is excluded because it relies on initial clone for future
@@ -5207,6 +5959,12 @@
         vnode.isAsyncPlaceholder = true;
         return true
       }
+      // assert node match
+      {
+        if (!assertNodeMatch(elm, vnode, inVPre)) {
+          return false
+        }
+      }
       if (isDef(data)) {
         if (isDef(i = data.hook) && isDef(i = i.init)) { i(vnode, true /* hydrating */); }
         if (isDef(i = vnode.componentInstance)) {
@@ -5224,6 +5982,15 @@
             // v-html and domProps: innerHTML
             if (isDef(i = data) && isDef(i = i.domProps) && isDef(i = i.innerHTML)) {
               if (i !== elm.innerHTML) {
+                /* istanbul ignore if */
+                if (typeof console !== 'undefined' &&
+                  !hydrationBailed
+                ) {
+                  hydrationBailed = true;
+                  console.warn('Parent: ', elm);
+                  console.warn('server innerHTML: ', i);
+                  console.warn('client innerHTML: ', elm.innerHTML);
+                }
                 return false
               }
             } else {
@@ -5240,6 +6007,14 @@
               // if childNode is not null, it means the actual childNodes list is
               // longer than the virtual children list.
               if (!childrenMatch || childNode) {
+                /* istanbul ignore if */
+                if (typeof console !== 'undefined' &&
+                  !hydrationBailed
+                ) {
+                  hydrationBailed = true;
+                  console.warn('Parent: ', elm);
+                  console.warn('Mismatching childNodes vs. VNodes: ', elm.childNodes, children);
+                }
                 return false
               }
             }
@@ -5263,6 +6038,17 @@
         elm.data = vnode.text;
       }
       return true
+    }
+
+    function assertNodeMatch (node, vnode, inVPre) {
+      if (isDef(vnode.tag)) {
+        return vnode.tag.indexOf('vue-component') === 0 || (
+          !isUnknownElement$$1(vnode, inVPre) &&
+          vnode.tag.toLowerCase() === (node.tagName && node.tagName.toLowerCase())
+        )
+      } else {
+        return node.nodeType === (vnode.isComment ? 8 : 3)
+      }
     }
 
     return function patch (oldVnode, vnode, hydrating, removeOnly, parentElm, refElm) {
@@ -5296,6 +6082,14 @@
               if (hydrate(oldVnode, vnode, insertedVnodeQueue)) {
                 invokeInsertHook(vnode, insertedVnodeQueue, true);
                 return oldVnode
+              } else {
+                warn(
+                  'The client-side rendered virtual DOM tree is not matching ' +
+                  'server-rendered content. This is likely caused by incorrect ' +
+                  'HTML markup, for example nesting block-level elements inside ' +
+                  '<p>, or missing <tbody>. Bailing hydration and performing ' +
+                  'full client-side render.'
+                );
               }
             }
             // either not server-rendered, or hydration failed.
@@ -6332,6 +7126,10 @@
         : duration
     );
 
+    if (explicitEnterDuration != null) {
+      checkDuration(explicitEnterDuration, 'enter', vnode);
+    }
+
     var expectsCSS = css !== false && !isIE9;
     var userWantsControl = getHookArgumentsLength(enterHook);
 
@@ -6436,6 +7234,10 @@
         : duration
     );
 
+    if (isDef(explicitLeaveDuration)) {
+      checkDuration(explicitLeaveDuration, 'leave', vnode);
+    }
+
     var cb = el._leaveCb = once(function () {
       if (el.parentNode && el.parentNode._pending) {
         el.parentNode._pending[vnode.key] = null;
@@ -6493,6 +7295,23 @@
       if (!expectsCSS && !userWantsControl) {
         cb();
       }
+    }
+  }
+
+  // only used in dev mode
+  function checkDuration (val, name, vnode) {
+    if (typeof val !== 'number') {
+      warn(
+        "<transition> explicit " + name + " duration is not a valid number - " +
+        "got " + (JSON.stringify(val)) + ".",
+        vnode.context
+      );
+    } else if (isNaN(val)) {
+      warn(
+        "<transition> explicit " + name + " duration is NaN - " +
+        'the duration expression might be incorrect.',
+        vnode.context
+      );
     }
   }
 
@@ -6642,6 +7461,11 @@
     var value = binding.value;
     var isMultiple = el.multiple;
     if (isMultiple && !Array.isArray(value)) {
+      warn(
+        "<select multiple v-model=\"" + (binding.expression) + "\"> " +
+        "expects an Array value for its binding, but got " + (Object.prototype.toString.call(value).slice(8, -1)),
+        vm
+      );
       return
     }
     var selected, option;
@@ -6852,7 +7676,25 @@
         return
       }
 
+      // warn multiple elements
+      if (children.length > 1) {
+        warn(
+          '<transition> can only be used on a single element. Use ' +
+          '<transition-group> for lists.',
+          this.$parent
+        );
+      }
+
       var mode = this.mode;
+
+      // warn invalid mode
+      if (mode && mode !== 'in-out' && mode !== 'out-in'
+      ) {
+        warn(
+          'invalid <transition> mode: ' + mode,
+          this.$parent
+        );
+      }
 
       var rawChild = children[0];
 
@@ -6970,6 +7812,10 @@
             children.push(c);
             map[c.key] = c
             ;(c.data || (c.data = {})).transition = transitionData;
+          } else {
+            var opts = c.componentOptions;
+            var name = opts ? (opts.Ctor.options.name || opts.tag || '') : c.tag;
+            warn(("<transition-group> children must be keyed: <" + name + ">"));
           }
         }
       }
@@ -7134,7 +7980,23 @@
       if (config.devtools) {
         if (devtools) {
           devtools.emit('init', Vue);
+        } else if (
+          isChrome
+        ) {
+          console[console.info ? 'info' : 'log'](
+            'Download the Vue Devtools extension for a better development experience:\n' +
+            'https://github.com/vuejs/vue-devtools'
+          );
         }
+      }
+      if (config.productionTip !== false &&
+        typeof console !== 'undefined'
+      ) {
+        console[console.info ? 'info' : 'log'](
+          "You are running Vue in development mode.\n" +
+          "Make sure to turn on production mode when deploying for production.\n" +
+          "See more tips at https://vuejs.org/guide/deployment.html"
+        );
       }
     }, 0);
   }
@@ -7234,6 +8096,10 @@
     return val && typeof val.then === 'function'
   }
 
+  function assert (condition, msg) {
+    if (!condition) { throw new Error(("[vuex] " + msg)) }
+  }
+
   var Module = function Module (rawModule, runtime) {
     this.runtime = runtime;
     this._children = Object.create(null);
@@ -7324,6 +8190,10 @@
       var this$1 = this;
       if ( runtime === void 0 ) { runtime = true; }
 
+    {
+      assertRawModule(path, rawModule);
+    }
+
     var newModule = new Module(rawModule, runtime);
     if (path.length === 0) {
       this.root = newModule;
@@ -7349,6 +8219,9 @@
   };
 
   function update (path, targetModule, newModule) {
+    {
+      assertRawModule(path, newModule);
+    }
 
     // update target module
     targetModule.update(newModule);
@@ -7357,6 +8230,12 @@
     if (newModule.modules) {
       for (var key in newModule.modules) {
         if (!targetModule.getChild(key)) {
+          {
+            console.warn(
+              "[vuex] trying to add a new module '" + key + "' on hot reloading, " +
+              'manual reload is needed'
+            );
+          }
           return
         }
         update(
@@ -7366,6 +8245,47 @@
         );
       }
     }
+  }
+
+  var functionAssert = {
+    assert: function (value) { return typeof value === 'function'; },
+    expected: 'function'
+  };
+
+  var objectAssert = {
+    assert: function (value) { return typeof value === 'function' ||
+      (typeof value === 'object' && typeof value.handler === 'function'); },
+    expected: 'function or object with "handler" function'
+  };
+
+  var assertTypes = {
+    getters: functionAssert,
+    mutations: functionAssert,
+    actions: objectAssert
+  };
+
+  function assertRawModule (path, rawModule) {
+    Object.keys(assertTypes).forEach(function (key) {
+      if (!rawModule[key]) { return }
+
+      var assertOptions = assertTypes[key];
+
+      forEachValue(rawModule[key], function (value, type) {
+        assert(
+          assertOptions.assert(value),
+          makeAssertionMessage(path, key, type, value, assertOptions.expected)
+        );
+      });
+    });
+  }
+
+  function makeAssertionMessage (path, key, type, value, expected) {
+    var buf = key + " should be " + expected + " but \"" + key + "." + type + "\"";
+    if (path.length > 0) {
+      buf += " in module \"" + (path.join('.')) + "\"";
+    }
+    buf += " is " + (JSON.stringify(value)) + ".";
+    return buf
   }
 
   var Vue$1; // bind on install
@@ -7379,6 +8299,12 @@
     // this code should be placed here. See #731
     if (!Vue$1 && typeof window !== 'undefined' && window.Vue) {
       install(window.Vue);
+    }
+
+    {
+      assert(Vue$1, "must call Vue.use(Vuex) before creating a store instance.");
+      assert(typeof Promise !== 'undefined', "vuex requires a Promise polyfill in this browser.");
+      assert(this instanceof Store, "Store must be called with the new operator.");
     }
 
     var plugins = options.plugins; if ( plugins === void 0 ) { plugins = []; }
@@ -7439,6 +8365,9 @@
   };
 
   prototypeAccessors$2.state.set = function (v) {
+    {
+      assert(false, "Use store.replaceState() to explicit replace store state.");
+    }
   };
 
   Store.prototype.commit = function commit (_type, _payload, _options) {
@@ -7448,10 +8377,14 @@
     var ref = unifyObjectStyle(_type, _payload, _options);
       var type = ref.type;
       var payload = ref.payload;
+      var options = ref.options;
 
     var mutation = { type: type, payload: payload };
     var entry = this._mutations[type];
     if (!entry) {
+      {
+        console.error(("[vuex] unknown mutation type: " + type));
+      }
       return
     }
     this._withCommit(function () {
@@ -7460,6 +8393,15 @@
       });
     });
     this._subscribers.forEach(function (sub) { return sub(mutation, this$1.state); });
+
+    if (
+      options && options.silent
+    ) {
+      console.warn(
+        "[vuex] mutation type: " + type + ". Silent option has been removed. " +
+        'Use the filter functionality in the vue-devtools'
+      );
+    }
   };
 
   Store.prototype.dispatch = function dispatch (_type, _payload) {
@@ -7473,6 +8415,9 @@
     var action = { type: type, payload: payload };
     var entry = this._actions[type];
     if (!entry) {
+      {
+        console.error(("[vuex] unknown action type: " + type));
+      }
       return
     }
 
@@ -7493,6 +8438,10 @@
 
   Store.prototype.watch = function watch (getter, cb, options) {
       var this$1 = this;
+
+    {
+      assert(typeof getter === 'function', "store.watch only accepts a function.");
+    }
     return this._watcherVM.$watch(function () { return getter(this$1.state, this$1.getters); }, cb, options)
   };
 
@@ -7509,6 +8458,11 @@
 
     if (typeof path === 'string') { path = [path]; }
 
+    {
+      assert(Array.isArray(path), "module path must be a string or an Array.");
+      assert(path.length > 0, 'cannot register the root module by using registerModule.');
+    }
+
     this._modules.register(path, rawModule);
     installModule(this, this.state, path, this._modules.get(path), options.preserveState);
     // reset store to update getters...
@@ -7519,6 +8473,10 @@
       var this$1 = this;
 
     if (typeof path === 'string') { path = [path]; }
+
+    {
+      assert(Array.isArray(path), "module path must be a string or an Array.");
+    }
 
     this._modules.unregister(path);
     this._withCommit(function () {
@@ -7669,6 +8627,10 @@
 
         if (!options || !options.root) {
           type = namespace + type;
+          if (!store._actions[type]) {
+            console.error(("[vuex] unknown local action type: " + (args.type) + ", global type: " + type));
+            return
+          }
         }
 
         return store.dispatch(type, payload)
@@ -7682,6 +8644,10 @@
 
         if (!options || !options.root) {
           type = namespace + type;
+          if (!store._mutations[type]) {
+            console.error(("[vuex] unknown local mutation type: " + (args.type) + ", global type: " + type));
+            return
+          }
         }
 
         store.commit(type, payload, options);
@@ -7761,6 +8727,9 @@
 
   function registerGetter (store, type, rawGetter, local) {
     if (store._wrappedGetters[type]) {
+      {
+        console.error(("[vuex] duplicate getter key: " + type));
+      }
       return
     }
     store._wrappedGetters[type] = function wrappedGetter (store) {
@@ -7775,6 +8744,9 @@
 
   function enableStrictMode (store) {
     store._vm.$watch(function () { return this._data.$$state }, function () {
+      {
+        assert(store._committing, "Do not mutate vuex store state outside mutation handlers.");
+      }
     }, { deep: true, sync: true });
   }
 
@@ -7791,11 +8763,20 @@
       type = type.type;
     }
 
+    {
+      assert(typeof type === 'string', ("Expects string as the type, but found " + (typeof type) + "."));
+    }
+
     return { type: type, payload: payload, options: options }
   }
 
   function install (_Vue) {
     if (Vue$1 && _Vue === Vue$1) {
+      {
+        console.error(
+          '[vuex] already installed. Vue.use(Vuex) should be called only once.'
+        );
+      }
       return
     }
     Vue$1 = _Vue;
@@ -7868,6 +8849,10 @@
         if (namespace && !getModuleByNamespace(this.$store, 'mapGetters', namespace)) {
           return
         }
+        if (!(val in this.$store.getters)) {
+          console.error(("[vuex] unknown getter: " + val));
+          return
+        }
         return this.$store.getters[val]
       };
       // mark vuex getter for devtools
@@ -7931,6 +8916,9 @@
 
   function getModuleByNamespace (store, helper, namespace) {
     var module = store._modulesNamespaceMap[namespace];
+    if (!module) {
+      console.error(("[vuex] module namespace not found in " + helper + "(): " + namespace));
+    }
     return module
   }
 
@@ -7945,21 +8933,1715 @@
     createNamespacedHelpers: createNamespacedHelpers
   };
 
-  var store = {
+  var state = {
+      geolocatonSupport: false,
+      requestStatus: 'idle', // idle, done, loading, error
+      errorMessage: '',
+      venueResults: {
+          // How it looks like:
 
+          // groups: [{…}]
+          // headerFullLocation: "New York"
+          // headerLocation: "New York"
+          // headerLocationGranularity: "city"
+          // suggestedBounds: {ne: {…}, sw: {…}}
+          // suggestedFilters: {header: "Tap to show:", filters: Array(2)}
+          // suggestedRadius: 907
+          // totalResults: 195
+      }
+  };
+
+  var commonjsGlobal = typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
+
+  function createCommonjsModule(fn, module) {
+  	return module = { exports: {} }, fn(module, module.exports), module.exports;
+  }
+
+  var axios = createCommonjsModule(function (module, exports) {
+  /* axios v0.18.0 | (c) 2018 by Matt Zabriskie */
+  (function webpackUniversalModuleDefinition(root, factory) {
+  	{ module.exports = factory(); }
+  })(commonjsGlobal, function() {
+  return /******/ (function(modules) { // webpackBootstrap
+  /******/ 	// The module cache
+  /******/ 	var installedModules = {};
+  /******/
+  /******/ 	// The require function
+  /******/ 	function __webpack_require__(moduleId) {
+  /******/
+  /******/ 		// Check if module is in cache
+  /******/ 		if(installedModules[moduleId])
+  /******/ 			{ return installedModules[moduleId].exports; }
+  /******/
+  /******/ 		// Create a new module (and put it into the cache)
+  /******/ 		var module = installedModules[moduleId] = {
+  /******/ 			exports: {},
+  /******/ 			id: moduleId,
+  /******/ 			loaded: false
+  /******/ 		};
+  /******/
+  /******/ 		// Execute the module function
+  /******/ 		modules[moduleId].call(module.exports, module, module.exports, __webpack_require__);
+  /******/
+  /******/ 		// Flag the module as loaded
+  /******/ 		module.loaded = true;
+  /******/
+  /******/ 		// Return the exports of the module
+  /******/ 		return module.exports;
+  /******/ 	}
+  /******/
+  /******/
+  /******/ 	// expose the modules object (__webpack_modules__)
+  /******/ 	__webpack_require__.m = modules;
+  /******/
+  /******/ 	// expose the module cache
+  /******/ 	__webpack_require__.c = installedModules;
+  /******/
+  /******/ 	// __webpack_public_path__
+  /******/ 	__webpack_require__.p = "";
+  /******/
+  /******/ 	// Load entry module and return exports
+  /******/ 	return __webpack_require__(0);
+  /******/ })
+  /************************************************************************/
+  /******/ ([
+  /* 0 */
+  /***/ (function(module, exports, __webpack_require__) {
+
+  	module.exports = __webpack_require__(1);
+
+  /***/ }),
+  /* 1 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var utils = __webpack_require__(2);
+  	var bind = __webpack_require__(3);
+  	var Axios = __webpack_require__(5);
+  	var defaults = __webpack_require__(6);
+  	
+  	/**
+  	 * Create an instance of Axios
+  	 *
+  	 * @param {Object} defaultConfig The default config for the instance
+  	 * @return {Axios} A new instance of Axios
+  	 */
+  	function createInstance(defaultConfig) {
+  	  var context = new Axios(defaultConfig);
+  	  var instance = bind(Axios.prototype.request, context);
+  	
+  	  // Copy axios.prototype to instance
+  	  utils.extend(instance, Axios.prototype, context);
+  	
+  	  // Copy context to instance
+  	  utils.extend(instance, context);
+  	
+  	  return instance;
+  	}
+  	
+  	// Create the default instance to be exported
+  	var axios = createInstance(defaults);
+  	
+  	// Expose Axios class to allow class inheritance
+  	axios.Axios = Axios;
+  	
+  	// Factory for creating new instances
+  	axios.create = function create(instanceConfig) {
+  	  return createInstance(utils.merge(defaults, instanceConfig));
+  	};
+  	
+  	// Expose Cancel & CancelToken
+  	axios.Cancel = __webpack_require__(23);
+  	axios.CancelToken = __webpack_require__(24);
+  	axios.isCancel = __webpack_require__(20);
+  	
+  	// Expose all/spread
+  	axios.all = function all(promises) {
+  	  return Promise.all(promises);
+  	};
+  	axios.spread = __webpack_require__(25);
+  	
+  	module.exports = axios;
+  	
+  	// Allow use of default import syntax in TypeScript
+  	module.exports.default = axios;
+
+
+  /***/ }),
+  /* 2 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var bind = __webpack_require__(3);
+  	var isBuffer = __webpack_require__(4);
+  	
+  	/*global toString:true*/
+  	
+  	// utils is a library of generic helper functions non-specific to axios
+  	
+  	var toString = Object.prototype.toString;
+  	
+  	/**
+  	 * Determine if a value is an Array
+  	 *
+  	 * @param {Object} val The value to test
+  	 * @returns {boolean} True if value is an Array, otherwise false
+  	 */
+  	function isArray(val) {
+  	  return toString.call(val) === '[object Array]';
+  	}
+  	
+  	/**
+  	 * Determine if a value is an ArrayBuffer
+  	 *
+  	 * @param {Object} val The value to test
+  	 * @returns {boolean} True if value is an ArrayBuffer, otherwise false
+  	 */
+  	function isArrayBuffer(val) {
+  	  return toString.call(val) === '[object ArrayBuffer]';
+  	}
+  	
+  	/**
+  	 * Determine if a value is a FormData
+  	 *
+  	 * @param {Object} val The value to test
+  	 * @returns {boolean} True if value is an FormData, otherwise false
+  	 */
+  	function isFormData(val) {
+  	  return (typeof FormData !== 'undefined') && (val instanceof FormData);
+  	}
+  	
+  	/**
+  	 * Determine if a value is a view on an ArrayBuffer
+  	 *
+  	 * @param {Object} val The value to test
+  	 * @returns {boolean} True if value is a view on an ArrayBuffer, otherwise false
+  	 */
+  	function isArrayBufferView(val) {
+  	  var result;
+  	  if ((typeof ArrayBuffer !== 'undefined') && (ArrayBuffer.isView)) {
+  	    result = ArrayBuffer.isView(val);
+  	  } else {
+  	    result = (val) && (val.buffer) && (val.buffer instanceof ArrayBuffer);
+  	  }
+  	  return result;
+  	}
+  	
+  	/**
+  	 * Determine if a value is a String
+  	 *
+  	 * @param {Object} val The value to test
+  	 * @returns {boolean} True if value is a String, otherwise false
+  	 */
+  	function isString(val) {
+  	  return typeof val === 'string';
+  	}
+  	
+  	/**
+  	 * Determine if a value is a Number
+  	 *
+  	 * @param {Object} val The value to test
+  	 * @returns {boolean} True if value is a Number, otherwise false
+  	 */
+  	function isNumber(val) {
+  	  return typeof val === 'number';
+  	}
+  	
+  	/**
+  	 * Determine if a value is undefined
+  	 *
+  	 * @param {Object} val The value to test
+  	 * @returns {boolean} True if the value is undefined, otherwise false
+  	 */
+  	function isUndefined(val) {
+  	  return typeof val === 'undefined';
+  	}
+  	
+  	/**
+  	 * Determine if a value is an Object
+  	 *
+  	 * @param {Object} val The value to test
+  	 * @returns {boolean} True if value is an Object, otherwise false
+  	 */
+  	function isObject(val) {
+  	  return val !== null && typeof val === 'object';
+  	}
+  	
+  	/**
+  	 * Determine if a value is a Date
+  	 *
+  	 * @param {Object} val The value to test
+  	 * @returns {boolean} True if value is a Date, otherwise false
+  	 */
+  	function isDate(val) {
+  	  return toString.call(val) === '[object Date]';
+  	}
+  	
+  	/**
+  	 * Determine if a value is a File
+  	 *
+  	 * @param {Object} val The value to test
+  	 * @returns {boolean} True if value is a File, otherwise false
+  	 */
+  	function isFile(val) {
+  	  return toString.call(val) === '[object File]';
+  	}
+  	
+  	/**
+  	 * Determine if a value is a Blob
+  	 *
+  	 * @param {Object} val The value to test
+  	 * @returns {boolean} True if value is a Blob, otherwise false
+  	 */
+  	function isBlob(val) {
+  	  return toString.call(val) === '[object Blob]';
+  	}
+  	
+  	/**
+  	 * Determine if a value is a Function
+  	 *
+  	 * @param {Object} val The value to test
+  	 * @returns {boolean} True if value is a Function, otherwise false
+  	 */
+  	function isFunction(val) {
+  	  return toString.call(val) === '[object Function]';
+  	}
+  	
+  	/**
+  	 * Determine if a value is a Stream
+  	 *
+  	 * @param {Object} val The value to test
+  	 * @returns {boolean} True if value is a Stream, otherwise false
+  	 */
+  	function isStream(val) {
+  	  return isObject(val) && isFunction(val.pipe);
+  	}
+  	
+  	/**
+  	 * Determine if a value is a URLSearchParams object
+  	 *
+  	 * @param {Object} val The value to test
+  	 * @returns {boolean} True if value is a URLSearchParams object, otherwise false
+  	 */
+  	function isURLSearchParams(val) {
+  	  return typeof URLSearchParams !== 'undefined' && val instanceof URLSearchParams;
+  	}
+  	
+  	/**
+  	 * Trim excess whitespace off the beginning and end of a string
+  	 *
+  	 * @param {String} str The String to trim
+  	 * @returns {String} The String freed of excess whitespace
+  	 */
+  	function trim(str) {
+  	  return str.replace(/^\s*/, '').replace(/\s*$/, '');
+  	}
+  	
+  	/**
+  	 * Determine if we're running in a standard browser environment
+  	 *
+  	 * This allows axios to run in a web worker, and react-native.
+  	 * Both environments support XMLHttpRequest, but not fully standard globals.
+  	 *
+  	 * web workers:
+  	 *  typeof window -> undefined
+  	 *  typeof document -> undefined
+  	 *
+  	 * react-native:
+  	 *  navigator.product -> 'ReactNative'
+  	 */
+  	function isStandardBrowserEnv() {
+  	  if (typeof navigator !== 'undefined' && navigator.product === 'ReactNative') {
+  	    return false;
+  	  }
+  	  return (
+  	    typeof window !== 'undefined' &&
+  	    typeof document !== 'undefined'
+  	  );
+  	}
+  	
+  	/**
+  	 * Iterate over an Array or an Object invoking a function for each item.
+  	 *
+  	 * If `obj` is an Array callback will be called passing
+  	 * the value, index, and complete array for each item.
+  	 *
+  	 * If 'obj' is an Object callback will be called passing
+  	 * the value, key, and complete object for each property.
+  	 *
+  	 * @param {Object|Array} obj The object to iterate
+  	 * @param {Function} fn The callback to invoke for each item
+  	 */
+  	function forEach(obj, fn) {
+  	  // Don't bother if no value provided
+  	  if (obj === null || typeof obj === 'undefined') {
+  	    return;
+  	  }
+  	
+  	  // Force an array if not already something iterable
+  	  if (typeof obj !== 'object') {
+  	    /*eslint no-param-reassign:0*/
+  	    obj = [obj];
+  	  }
+  	
+  	  if (isArray(obj)) {
+  	    // Iterate over array values
+  	    for (var i = 0, l = obj.length; i < l; i++) {
+  	      fn.call(null, obj[i], i, obj);
+  	    }
+  	  } else {
+  	    // Iterate over object keys
+  	    for (var key in obj) {
+  	      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+  	        fn.call(null, obj[key], key, obj);
+  	      }
+  	    }
+  	  }
+  	}
+  	
+  	/**
+  	 * Accepts varargs expecting each argument to be an object, then
+  	 * immutably merges the properties of each object and returns result.
+  	 *
+  	 * When multiple objects contain the same key the later object in
+  	 * the arguments list will take precedence.
+  	 *
+  	 * Example:
+  	 *
+  	 * ```js
+  	 * var result = merge({foo: 123}, {foo: 456});
+  	 * console.log(result.foo); // outputs 456
+  	 * ```
+  	 *
+  	 * @param {Object} obj1 Object to merge
+  	 * @returns {Object} Result of all merge properties
+  	 */
+  	function merge(/* obj1, obj2, obj3, ... */) {
+  	  var arguments$1 = arguments;
+
+  	  var result = {};
+  	  function assignValue(val, key) {
+  	    if (typeof result[key] === 'object' && typeof val === 'object') {
+  	      result[key] = merge(result[key], val);
+  	    } else {
+  	      result[key] = val;
+  	    }
+  	  }
+  	
+  	  for (var i = 0, l = arguments.length; i < l; i++) {
+  	    forEach(arguments$1[i], assignValue);
+  	  }
+  	  return result;
+  	}
+  	
+  	/**
+  	 * Extends object a by mutably adding to it the properties of object b.
+  	 *
+  	 * @param {Object} a The object to be extended
+  	 * @param {Object} b The object to copy properties from
+  	 * @param {Object} thisArg The object to bind function to
+  	 * @return {Object} The resulting value of object a
+  	 */
+  	function extend(a, b, thisArg) {
+  	  forEach(b, function assignValue(val, key) {
+  	    if (thisArg && typeof val === 'function') {
+  	      a[key] = bind(val, thisArg);
+  	    } else {
+  	      a[key] = val;
+  	    }
+  	  });
+  	  return a;
+  	}
+  	
+  	module.exports = {
+  	  isArray: isArray,
+  	  isArrayBuffer: isArrayBuffer,
+  	  isBuffer: isBuffer,
+  	  isFormData: isFormData,
+  	  isArrayBufferView: isArrayBufferView,
+  	  isString: isString,
+  	  isNumber: isNumber,
+  	  isObject: isObject,
+  	  isUndefined: isUndefined,
+  	  isDate: isDate,
+  	  isFile: isFile,
+  	  isBlob: isBlob,
+  	  isFunction: isFunction,
+  	  isStream: isStream,
+  	  isURLSearchParams: isURLSearchParams,
+  	  isStandardBrowserEnv: isStandardBrowserEnv,
+  	  forEach: forEach,
+  	  merge: merge,
+  	  extend: extend,
+  	  trim: trim
+  	};
+
+
+  /***/ }),
+  /* 3 */
+  /***/ (function(module, exports) {
+  	
+  	module.exports = function bind(fn, thisArg) {
+  	  return function wrap() {
+  	    var arguments$1 = arguments;
+
+  	    var args = new Array(arguments.length);
+  	    for (var i = 0; i < args.length; i++) {
+  	      args[i] = arguments$1[i];
+  	    }
+  	    return fn.apply(thisArg, args);
+  	  };
+  	};
+
+
+  /***/ }),
+  /* 4 */
+  /***/ (function(module, exports) {
+
+  	/*!
+  	 * Determine if an object is a Buffer
+  	 *
+  	 * @author   Feross Aboukhadijeh <https://feross.org>
+  	 * @license  MIT
+  	 */
+  	
+  	// The _isBuffer check is for Safari 5-7 support, because it's missing
+  	// Object.prototype.constructor. Remove this eventually
+  	module.exports = function (obj) {
+  	  return obj != null && (isBuffer(obj) || isSlowBuffer(obj) || !!obj._isBuffer)
+  	};
+  	
+  	function isBuffer (obj) {
+  	  return !!obj.constructor && typeof obj.constructor.isBuffer === 'function' && obj.constructor.isBuffer(obj)
+  	}
+  	
+  	// For Node v0.10 support. Remove this eventually.
+  	function isSlowBuffer (obj) {
+  	  return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
+  	}
+
+
+  /***/ }),
+  /* 5 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var defaults = __webpack_require__(6);
+  	var utils = __webpack_require__(2);
+  	var InterceptorManager = __webpack_require__(17);
+  	var dispatchRequest = __webpack_require__(18);
+  	
+  	/**
+  	 * Create a new instance of Axios
+  	 *
+  	 * @param {Object} instanceConfig The default config for the instance
+  	 */
+  	function Axios(instanceConfig) {
+  	  this.defaults = instanceConfig;
+  	  this.interceptors = {
+  	    request: new InterceptorManager(),
+  	    response: new InterceptorManager()
+  	  };
+  	}
+  	
+  	/**
+  	 * Dispatch a request
+  	 *
+  	 * @param {Object} config The config specific for this request (merged with this.defaults)
+  	 */
+  	Axios.prototype.request = function request(config) {
+  	  /*eslint no-param-reassign:0*/
+  	  // Allow for axios('example/url'[, config]) a la fetch API
+  	  if (typeof config === 'string') {
+  	    config = utils.merge({
+  	      url: arguments[0]
+  	    }, arguments[1]);
+  	  }
+  	
+  	  config = utils.merge(defaults, {method: 'get'}, this.defaults, config);
+  	  config.method = config.method.toLowerCase();
+  	
+  	  // Hook up interceptors middleware
+  	  var chain = [dispatchRequest, undefined];
+  	  var promise = Promise.resolve(config);
+  	
+  	  this.interceptors.request.forEach(function unshiftRequestInterceptors(interceptor) {
+  	    chain.unshift(interceptor.fulfilled, interceptor.rejected);
+  	  });
+  	
+  	  this.interceptors.response.forEach(function pushResponseInterceptors(interceptor) {
+  	    chain.push(interceptor.fulfilled, interceptor.rejected);
+  	  });
+  	
+  	  while (chain.length) {
+  	    promise = promise.then(chain.shift(), chain.shift());
+  	  }
+  	
+  	  return promise;
+  	};
+  	
+  	// Provide aliases for supported request methods
+  	utils.forEach(['delete', 'get', 'head', 'options'], function forEachMethodNoData(method) {
+  	  /*eslint func-names:0*/
+  	  Axios.prototype[method] = function(url, config) {
+  	    return this.request(utils.merge(config || {}, {
+  	      method: method,
+  	      url: url
+  	    }));
+  	  };
+  	});
+  	
+  	utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
+  	  /*eslint func-names:0*/
+  	  Axios.prototype[method] = function(url, data, config) {
+  	    return this.request(utils.merge(config || {}, {
+  	      method: method,
+  	      url: url,
+  	      data: data
+  	    }));
+  	  };
+  	});
+  	
+  	module.exports = Axios;
+
+
+  /***/ }),
+  /* 6 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var utils = __webpack_require__(2);
+  	var normalizeHeaderName = __webpack_require__(7);
+  	
+  	var DEFAULT_CONTENT_TYPE = {
+  	  'Content-Type': 'application/x-www-form-urlencoded'
+  	};
+  	
+  	function setContentTypeIfUnset(headers, value) {
+  	  if (!utils.isUndefined(headers) && utils.isUndefined(headers['Content-Type'])) {
+  	    headers['Content-Type'] = value;
+  	  }
+  	}
+  	
+  	function getDefaultAdapter() {
+  	  var adapter;
+  	  if (typeof XMLHttpRequest !== 'undefined') {
+  	    // For browsers use XHR adapter
+  	    adapter = __webpack_require__(8);
+  	  } else if (typeof process !== 'undefined') {
+  	    // For node use HTTP adapter
+  	    adapter = __webpack_require__(8);
+  	  }
+  	  return adapter;
+  	}
+  	
+  	var defaults = {
+  	  adapter: getDefaultAdapter(),
+  	
+  	  transformRequest: [function transformRequest(data, headers) {
+  	    normalizeHeaderName(headers, 'Content-Type');
+  	    if (utils.isFormData(data) ||
+  	      utils.isArrayBuffer(data) ||
+  	      utils.isBuffer(data) ||
+  	      utils.isStream(data) ||
+  	      utils.isFile(data) ||
+  	      utils.isBlob(data)
+  	    ) {
+  	      return data;
+  	    }
+  	    if (utils.isArrayBufferView(data)) {
+  	      return data.buffer;
+  	    }
+  	    if (utils.isURLSearchParams(data)) {
+  	      setContentTypeIfUnset(headers, 'application/x-www-form-urlencoded;charset=utf-8');
+  	      return data.toString();
+  	    }
+  	    if (utils.isObject(data)) {
+  	      setContentTypeIfUnset(headers, 'application/json;charset=utf-8');
+  	      return JSON.stringify(data);
+  	    }
+  	    return data;
+  	  }],
+  	
+  	  transformResponse: [function transformResponse(data) {
+  	    /*eslint no-param-reassign:0*/
+  	    if (typeof data === 'string') {
+  	      try {
+  	        data = JSON.parse(data);
+  	      } catch (e) { /* Ignore */ }
+  	    }
+  	    return data;
+  	  }],
+  	
+  	  /**
+  	   * A timeout in milliseconds to abort a request. If set to 0 (default) a
+  	   * timeout is not created.
+  	   */
+  	  timeout: 0,
+  	
+  	  xsrfCookieName: 'XSRF-TOKEN',
+  	  xsrfHeaderName: 'X-XSRF-TOKEN',
+  	
+  	  maxContentLength: -1,
+  	
+  	  validateStatus: function validateStatus(status) {
+  	    return status >= 200 && status < 300;
+  	  }
+  	};
+  	
+  	defaults.headers = {
+  	  common: {
+  	    'Accept': 'application/json, text/plain, */*'
+  	  }
+  	};
+  	
+  	utils.forEach(['delete', 'get', 'head'], function forEachMethodNoData(method) {
+  	  defaults.headers[method] = {};
+  	});
+  	
+  	utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
+  	  defaults.headers[method] = utils.merge(DEFAULT_CONTENT_TYPE);
+  	});
+  	
+  	module.exports = defaults;
+
+
+  /***/ }),
+  /* 7 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var utils = __webpack_require__(2);
+  	
+  	module.exports = function normalizeHeaderName(headers, normalizedName) {
+  	  utils.forEach(headers, function processHeader(value, name) {
+  	    if (name !== normalizedName && name.toUpperCase() === normalizedName.toUpperCase()) {
+  	      headers[normalizedName] = value;
+  	      delete headers[name];
+  	    }
+  	  });
+  	};
+
+
+  /***/ }),
+  /* 8 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var utils = __webpack_require__(2);
+  	var settle = __webpack_require__(9);
+  	var buildURL = __webpack_require__(12);
+  	var parseHeaders = __webpack_require__(13);
+  	var isURLSameOrigin = __webpack_require__(14);
+  	var createError = __webpack_require__(10);
+  	var btoa = (typeof window !== 'undefined' && window.btoa && window.btoa.bind(window)) || __webpack_require__(15);
+  	
+  	module.exports = function xhrAdapter(config) {
+  	  return new Promise(function dispatchXhrRequest(resolve, reject) {
+  	    var requestData = config.data;
+  	    var requestHeaders = config.headers;
+  	
+  	    if (utils.isFormData(requestData)) {
+  	      delete requestHeaders['Content-Type']; // Let the browser set it
+  	    }
+  	
+  	    var request = new XMLHttpRequest();
+  	    var loadEvent = 'onreadystatechange';
+  	    var xDomain = false;
+  	
+  	    // For IE 8/9 CORS support
+  	    // Only supports POST and GET calls and doesn't returns the response headers.
+  	    // DON'T do this for testing b/c XMLHttpRequest is mocked, not XDomainRequest.
+  	    if (typeof window !== 'undefined' &&
+  	        window.XDomainRequest && !('withCredentials' in request) &&
+  	        !isURLSameOrigin(config.url)) {
+  	      request = new window.XDomainRequest();
+  	      loadEvent = 'onload';
+  	      xDomain = true;
+  	      request.onprogress = function handleProgress() {};
+  	      request.ontimeout = function handleTimeout() {};
+  	    }
+  	
+  	    // HTTP basic authentication
+  	    if (config.auth) {
+  	      var username = config.auth.username || '';
+  	      var password = config.auth.password || '';
+  	      requestHeaders.Authorization = 'Basic ' + btoa(username + ':' + password);
+  	    }
+  	
+  	    request.open(config.method.toUpperCase(), buildURL(config.url, config.params, config.paramsSerializer), true);
+  	
+  	    // Set the request timeout in MS
+  	    request.timeout = config.timeout;
+  	
+  	    // Listen for ready state
+  	    request[loadEvent] = function handleLoad() {
+  	      if (!request || (request.readyState !== 4 && !xDomain)) {
+  	        return;
+  	      }
+  	
+  	      // The request errored out and we didn't get a response, this will be
+  	      // handled by onerror instead
+  	      // With one exception: request that using file: protocol, most browsers
+  	      // will return status as 0 even though it's a successful request
+  	      if (request.status === 0 && !(request.responseURL && request.responseURL.indexOf('file:') === 0)) {
+  	        return;
+  	      }
+  	
+  	      // Prepare the response
+  	      var responseHeaders = 'getAllResponseHeaders' in request ? parseHeaders(request.getAllResponseHeaders()) : null;
+  	      var responseData = !config.responseType || config.responseType === 'text' ? request.responseText : request.response;
+  	      var response = {
+  	        data: responseData,
+  	        // IE sends 1223 instead of 204 (https://github.com/axios/axios/issues/201)
+  	        status: request.status === 1223 ? 204 : request.status,
+  	        statusText: request.status === 1223 ? 'No Content' : request.statusText,
+  	        headers: responseHeaders,
+  	        config: config,
+  	        request: request
+  	      };
+  	
+  	      settle(resolve, reject, response);
+  	
+  	      // Clean up request
+  	      request = null;
+  	    };
+  	
+  	    // Handle low level network errors
+  	    request.onerror = function handleError() {
+  	      // Real errors are hidden from us by the browser
+  	      // onerror should only fire if it's a network error
+  	      reject(createError('Network Error', config, null, request));
+  	
+  	      // Clean up request
+  	      request = null;
+  	    };
+  	
+  	    // Handle timeout
+  	    request.ontimeout = function handleTimeout() {
+  	      reject(createError('timeout of ' + config.timeout + 'ms exceeded', config, 'ECONNABORTED',
+  	        request));
+  	
+  	      // Clean up request
+  	      request = null;
+  	    };
+  	
+  	    // Add xsrf header
+  	    // This is only done if running in a standard browser environment.
+  	    // Specifically not if we're in a web worker, or react-native.
+  	    if (utils.isStandardBrowserEnv()) {
+  	      var cookies = __webpack_require__(16);
+  	
+  	      // Add xsrf header
+  	      var xsrfValue = (config.withCredentials || isURLSameOrigin(config.url)) && config.xsrfCookieName ?
+  	          cookies.read(config.xsrfCookieName) :
+  	          undefined;
+  	
+  	      if (xsrfValue) {
+  	        requestHeaders[config.xsrfHeaderName] = xsrfValue;
+  	      }
+  	    }
+  	
+  	    // Add headers to the request
+  	    if ('setRequestHeader' in request) {
+  	      utils.forEach(requestHeaders, function setRequestHeader(val, key) {
+  	        if (typeof requestData === 'undefined' && key.toLowerCase() === 'content-type') {
+  	          // Remove Content-Type if data is undefined
+  	          delete requestHeaders[key];
+  	        } else {
+  	          // Otherwise add header to the request
+  	          request.setRequestHeader(key, val);
+  	        }
+  	      });
+  	    }
+  	
+  	    // Add withCredentials to request if needed
+  	    if (config.withCredentials) {
+  	      request.withCredentials = true;
+  	    }
+  	
+  	    // Add responseType to request if needed
+  	    if (config.responseType) {
+  	      try {
+  	        request.responseType = config.responseType;
+  	      } catch (e) {
+  	        // Expected DOMException thrown by browsers not compatible XMLHttpRequest Level 2.
+  	        // But, this can be suppressed for 'json' type as it can be parsed by default 'transformResponse' function.
+  	        if (config.responseType !== 'json') {
+  	          throw e;
+  	        }
+  	      }
+  	    }
+  	
+  	    // Handle progress if needed
+  	    if (typeof config.onDownloadProgress === 'function') {
+  	      request.addEventListener('progress', config.onDownloadProgress);
+  	    }
+  	
+  	    // Not all browsers support upload events
+  	    if (typeof config.onUploadProgress === 'function' && request.upload) {
+  	      request.upload.addEventListener('progress', config.onUploadProgress);
+  	    }
+  	
+  	    if (config.cancelToken) {
+  	      // Handle cancellation
+  	      config.cancelToken.promise.then(function onCanceled(cancel) {
+  	        if (!request) {
+  	          return;
+  	        }
+  	
+  	        request.abort();
+  	        reject(cancel);
+  	        // Clean up request
+  	        request = null;
+  	      });
+  	    }
+  	
+  	    if (requestData === undefined) {
+  	      requestData = null;
+  	    }
+  	
+  	    // Send the request
+  	    request.send(requestData);
+  	  });
+  	};
+
+
+  /***/ }),
+  /* 9 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var createError = __webpack_require__(10);
+  	
+  	/**
+  	 * Resolve or reject a Promise based on response status.
+  	 *
+  	 * @param {Function} resolve A function that resolves the promise.
+  	 * @param {Function} reject A function that rejects the promise.
+  	 * @param {object} response The response.
+  	 */
+  	module.exports = function settle(resolve, reject, response) {
+  	  var validateStatus = response.config.validateStatus;
+  	  // Note: status is not exposed by XDomainRequest
+  	  if (!response.status || !validateStatus || validateStatus(response.status)) {
+  	    resolve(response);
+  	  } else {
+  	    reject(createError(
+  	      'Request failed with status code ' + response.status,
+  	      response.config,
+  	      null,
+  	      response.request,
+  	      response
+  	    ));
+  	  }
+  	};
+
+
+  /***/ }),
+  /* 10 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var enhanceError = __webpack_require__(11);
+  	
+  	/**
+  	 * Create an Error with the specified message, config, error code, request and response.
+  	 *
+  	 * @param {string} message The error message.
+  	 * @param {Object} config The config.
+  	 * @param {string} [code] The error code (for example, 'ECONNABORTED').
+  	 * @param {Object} [request] The request.
+  	 * @param {Object} [response] The response.
+  	 * @returns {Error} The created error.
+  	 */
+  	module.exports = function createError(message, config, code, request, response) {
+  	  var error = new Error(message);
+  	  return enhanceError(error, config, code, request, response);
+  	};
+
+
+  /***/ }),
+  /* 11 */
+  /***/ (function(module, exports) {
+  	
+  	/**
+  	 * Update an Error with the specified config, error code, and response.
+  	 *
+  	 * @param {Error} error The error to update.
+  	 * @param {Object} config The config.
+  	 * @param {string} [code] The error code (for example, 'ECONNABORTED').
+  	 * @param {Object} [request] The request.
+  	 * @param {Object} [response] The response.
+  	 * @returns {Error} The error.
+  	 */
+  	module.exports = function enhanceError(error, config, code, request, response) {
+  	  error.config = config;
+  	  if (code) {
+  	    error.code = code;
+  	  }
+  	  error.request = request;
+  	  error.response = response;
+  	  return error;
+  	};
+
+
+  /***/ }),
+  /* 12 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var utils = __webpack_require__(2);
+  	
+  	function encode(val) {
+  	  return encodeURIComponent(val).
+  	    replace(/%40/gi, '@').
+  	    replace(/%3A/gi, ':').
+  	    replace(/%24/g, '$').
+  	    replace(/%2C/gi, ',').
+  	    replace(/%20/g, '+').
+  	    replace(/%5B/gi, '[').
+  	    replace(/%5D/gi, ']');
+  	}
+  	
+  	/**
+  	 * Build a URL by appending params to the end
+  	 *
+  	 * @param {string} url The base of the url (e.g., http://www.google.com)
+  	 * @param {object} [params] The params to be appended
+  	 * @returns {string} The formatted url
+  	 */
+  	module.exports = function buildURL(url, params, paramsSerializer) {
+  	  /*eslint no-param-reassign:0*/
+  	  if (!params) {
+  	    return url;
+  	  }
+  	
+  	  var serializedParams;
+  	  if (paramsSerializer) {
+  	    serializedParams = paramsSerializer(params);
+  	  } else if (utils.isURLSearchParams(params)) {
+  	    serializedParams = params.toString();
+  	  } else {
+  	    var parts = [];
+  	
+  	    utils.forEach(params, function serialize(val, key) {
+  	      if (val === null || typeof val === 'undefined') {
+  	        return;
+  	      }
+  	
+  	      if (utils.isArray(val)) {
+  	        key = key + '[]';
+  	      } else {
+  	        val = [val];
+  	      }
+  	
+  	      utils.forEach(val, function parseValue(v) {
+  	        if (utils.isDate(v)) {
+  	          v = v.toISOString();
+  	        } else if (utils.isObject(v)) {
+  	          v = JSON.stringify(v);
+  	        }
+  	        parts.push(encode(key) + '=' + encode(v));
+  	      });
+  	    });
+  	
+  	    serializedParams = parts.join('&');
+  	  }
+  	
+  	  if (serializedParams) {
+  	    url += (url.indexOf('?') === -1 ? '?' : '&') + serializedParams;
+  	  }
+  	
+  	  return url;
+  	};
+
+
+  /***/ }),
+  /* 13 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var utils = __webpack_require__(2);
+  	
+  	// Headers whose duplicates are ignored by node
+  	// c.f. https://nodejs.org/api/http.html#http_message_headers
+  	var ignoreDuplicateOf = [
+  	  'age', 'authorization', 'content-length', 'content-type', 'etag',
+  	  'expires', 'from', 'host', 'if-modified-since', 'if-unmodified-since',
+  	  'last-modified', 'location', 'max-forwards', 'proxy-authorization',
+  	  'referer', 'retry-after', 'user-agent'
+  	];
+  	
+  	/**
+  	 * Parse headers into an object
+  	 *
+  	 * ```
+  	 * Date: Wed, 27 Aug 2014 08:58:49 GMT
+  	 * Content-Type: application/json
+  	 * Connection: keep-alive
+  	 * Transfer-Encoding: chunked
+  	 * ```
+  	 *
+  	 * @param {String} headers Headers needing to be parsed
+  	 * @returns {Object} Headers parsed into an object
+  	 */
+  	module.exports = function parseHeaders(headers) {
+  	  var parsed = {};
+  	  var key;
+  	  var val;
+  	  var i;
+  	
+  	  if (!headers) { return parsed; }
+  	
+  	  utils.forEach(headers.split('\n'), function parser(line) {
+  	    i = line.indexOf(':');
+  	    key = utils.trim(line.substr(0, i)).toLowerCase();
+  	    val = utils.trim(line.substr(i + 1));
+  	
+  	    if (key) {
+  	      if (parsed[key] && ignoreDuplicateOf.indexOf(key) >= 0) {
+  	        return;
+  	      }
+  	      if (key === 'set-cookie') {
+  	        parsed[key] = (parsed[key] ? parsed[key] : []).concat([val]);
+  	      } else {
+  	        parsed[key] = parsed[key] ? parsed[key] + ', ' + val : val;
+  	      }
+  	    }
+  	  });
+  	
+  	  return parsed;
+  	};
+
+
+  /***/ }),
+  /* 14 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var utils = __webpack_require__(2);
+  	
+  	module.exports = (
+  	  utils.isStandardBrowserEnv() ?
+  	
+  	  // Standard browser envs have full support of the APIs needed to test
+  	  // whether the request URL is of the same origin as current location.
+  	  (function standardBrowserEnv() {
+  	    var msie = /(msie|trident)/i.test(navigator.userAgent);
+  	    var urlParsingNode = document.createElement('a');
+  	    var originURL;
+  	
+  	    /**
+  	    * Parse a URL to discover it's components
+  	    *
+  	    * @param {String} url The URL to be parsed
+  	    * @returns {Object}
+  	    */
+  	    function resolveURL(url) {
+  	      var href = url;
+  	
+  	      if (msie) {
+  	        // IE needs attribute set twice to normalize properties
+  	        urlParsingNode.setAttribute('href', href);
+  	        href = urlParsingNode.href;
+  	      }
+  	
+  	      urlParsingNode.setAttribute('href', href);
+  	
+  	      // urlParsingNode provides the UrlUtils interface - http://url.spec.whatwg.org/#urlutils
+  	      return {
+  	        href: urlParsingNode.href,
+  	        protocol: urlParsingNode.protocol ? urlParsingNode.protocol.replace(/:$/, '') : '',
+  	        host: urlParsingNode.host,
+  	        search: urlParsingNode.search ? urlParsingNode.search.replace(/^\?/, '') : '',
+  	        hash: urlParsingNode.hash ? urlParsingNode.hash.replace(/^#/, '') : '',
+  	        hostname: urlParsingNode.hostname,
+  	        port: urlParsingNode.port,
+  	        pathname: (urlParsingNode.pathname.charAt(0) === '/') ?
+  	                  urlParsingNode.pathname :
+  	                  '/' + urlParsingNode.pathname
+  	      };
+  	    }
+  	
+  	    originURL = resolveURL(window.location.href);
+  	
+  	    /**
+  	    * Determine if a URL shares the same origin as the current location
+  	    *
+  	    * @param {String} requestURL The URL to test
+  	    * @returns {boolean} True if URL shares the same origin, otherwise false
+  	    */
+  	    return function isURLSameOrigin(requestURL) {
+  	      var parsed = (utils.isString(requestURL)) ? resolveURL(requestURL) : requestURL;
+  	      return (parsed.protocol === originURL.protocol &&
+  	            parsed.host === originURL.host);
+  	    };
+  	  })() :
+  	
+  	  // Non standard browser envs (web workers, react-native) lack needed support.
+  	  (function nonStandardBrowserEnv() {
+  	    return function isURLSameOrigin() {
+  	      return true;
+  	    };
+  	  })()
+  	);
+
+
+  /***/ }),
+  /* 15 */
+  /***/ (function(module, exports) {
+  	
+  	// btoa polyfill for IE<10 courtesy https://github.com/davidchambers/Base64.js
+  	
+  	var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  	
+  	function E() {
+  	  this.message = 'String contains an invalid character';
+  	}
+  	E.prototype = new Error;
+  	E.prototype.code = 5;
+  	E.prototype.name = 'InvalidCharacterError';
+  	
+  	function btoa(input) {
+  	  var str = String(input);
+  	  var output = '';
+  	  for (
+  	    // initialize result and counter
+  	    var block, charCode, idx = 0, map = chars;
+  	    // if the next str index does not exist:
+  	    //   change the mapping table to "="
+  	    //   check if d has no fractional digits
+  	    str.charAt(idx | 0) || (map = '=', idx % 1);
+  	    // "8 - idx % 1 * 8" generates the sequence 2, 4, 6, 8
+  	    output += map.charAt(63 & block >> 8 - idx % 1 * 8)
+  	  ) {
+  	    charCode = str.charCodeAt(idx += 3 / 4);
+  	    if (charCode > 0xFF) {
+  	      throw new E();
+  	    }
+  	    block = block << 8 | charCode;
+  	  }
+  	  return output;
+  	}
+  	
+  	module.exports = btoa;
+
+
+  /***/ }),
+  /* 16 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var utils = __webpack_require__(2);
+  	
+  	module.exports = (
+  	  utils.isStandardBrowserEnv() ?
+  	
+  	  // Standard browser envs support document.cookie
+  	  (function standardBrowserEnv() {
+  	    return {
+  	      write: function write(name, value, expires, path, domain, secure) {
+  	        var cookie = [];
+  	        cookie.push(name + '=' + encodeURIComponent(value));
+  	
+  	        if (utils.isNumber(expires)) {
+  	          cookie.push('expires=' + new Date(expires).toGMTString());
+  	        }
+  	
+  	        if (utils.isString(path)) {
+  	          cookie.push('path=' + path);
+  	        }
+  	
+  	        if (utils.isString(domain)) {
+  	          cookie.push('domain=' + domain);
+  	        }
+  	
+  	        if (secure === true) {
+  	          cookie.push('secure');
+  	        }
+  	
+  	        document.cookie = cookie.join('; ');
+  	      },
+  	
+  	      read: function read(name) {
+  	        var match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
+  	        return (match ? decodeURIComponent(match[3]) : null);
+  	      },
+  	
+  	      remove: function remove(name) {
+  	        this.write(name, '', Date.now() - 86400000);
+  	      }
+  	    };
+  	  })() :
+  	
+  	  // Non standard browser env (web workers, react-native) lack needed support.
+  	  (function nonStandardBrowserEnv() {
+  	    return {
+  	      write: function write() {},
+  	      read: function read() { return null; },
+  	      remove: function remove() {}
+  	    };
+  	  })()
+  	);
+
+
+  /***/ }),
+  /* 17 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var utils = __webpack_require__(2);
+  	
+  	function InterceptorManager() {
+  	  this.handlers = [];
+  	}
+  	
+  	/**
+  	 * Add a new interceptor to the stack
+  	 *
+  	 * @param {Function} fulfilled The function to handle `then` for a `Promise`
+  	 * @param {Function} rejected The function to handle `reject` for a `Promise`
+  	 *
+  	 * @return {Number} An ID used to remove interceptor later
+  	 */
+  	InterceptorManager.prototype.use = function use(fulfilled, rejected) {
+  	  this.handlers.push({
+  	    fulfilled: fulfilled,
+  	    rejected: rejected
+  	  });
+  	  return this.handlers.length - 1;
+  	};
+  	
+  	/**
+  	 * Remove an interceptor from the stack
+  	 *
+  	 * @param {Number} id The ID that was returned by `use`
+  	 */
+  	InterceptorManager.prototype.eject = function eject(id) {
+  	  if (this.handlers[id]) {
+  	    this.handlers[id] = null;
+  	  }
+  	};
+  	
+  	/**
+  	 * Iterate over all the registered interceptors
+  	 *
+  	 * This method is particularly useful for skipping over any
+  	 * interceptors that may have become `null` calling `eject`.
+  	 *
+  	 * @param {Function} fn The function to call for each interceptor
+  	 */
+  	InterceptorManager.prototype.forEach = function forEach(fn) {
+  	  utils.forEach(this.handlers, function forEachHandler(h) {
+  	    if (h !== null) {
+  	      fn(h);
+  	    }
+  	  });
+  	};
+  	
+  	module.exports = InterceptorManager;
+
+
+  /***/ }),
+  /* 18 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var utils = __webpack_require__(2);
+  	var transformData = __webpack_require__(19);
+  	var isCancel = __webpack_require__(20);
+  	var defaults = __webpack_require__(6);
+  	var isAbsoluteURL = __webpack_require__(21);
+  	var combineURLs = __webpack_require__(22);
+  	
+  	/**
+  	 * Throws a `Cancel` if cancellation has been requested.
+  	 */
+  	function throwIfCancellationRequested(config) {
+  	  if (config.cancelToken) {
+  	    config.cancelToken.throwIfRequested();
+  	  }
+  	}
+  	
+  	/**
+  	 * Dispatch a request to the server using the configured adapter.
+  	 *
+  	 * @param {object} config The config that is to be used for the request
+  	 * @returns {Promise} The Promise to be fulfilled
+  	 */
+  	module.exports = function dispatchRequest(config) {
+  	  throwIfCancellationRequested(config);
+  	
+  	  // Support baseURL config
+  	  if (config.baseURL && !isAbsoluteURL(config.url)) {
+  	    config.url = combineURLs(config.baseURL, config.url);
+  	  }
+  	
+  	  // Ensure headers exist
+  	  config.headers = config.headers || {};
+  	
+  	  // Transform request data
+  	  config.data = transformData(
+  	    config.data,
+  	    config.headers,
+  	    config.transformRequest
+  	  );
+  	
+  	  // Flatten headers
+  	  config.headers = utils.merge(
+  	    config.headers.common || {},
+  	    config.headers[config.method] || {},
+  	    config.headers || {}
+  	  );
+  	
+  	  utils.forEach(
+  	    ['delete', 'get', 'head', 'post', 'put', 'patch', 'common'],
+  	    function cleanHeaderConfig(method) {
+  	      delete config.headers[method];
+  	    }
+  	  );
+  	
+  	  var adapter = config.adapter || defaults.adapter;
+  	
+  	  return adapter(config).then(function onAdapterResolution(response) {
+  	    throwIfCancellationRequested(config);
+  	
+  	    // Transform response data
+  	    response.data = transformData(
+  	      response.data,
+  	      response.headers,
+  	      config.transformResponse
+  	    );
+  	
+  	    return response;
+  	  }, function onAdapterRejection(reason) {
+  	    if (!isCancel(reason)) {
+  	      throwIfCancellationRequested(config);
+  	
+  	      // Transform response data
+  	      if (reason && reason.response) {
+  	        reason.response.data = transformData(
+  	          reason.response.data,
+  	          reason.response.headers,
+  	          config.transformResponse
+  	        );
+  	      }
+  	    }
+  	
+  	    return Promise.reject(reason);
+  	  });
+  	};
+
+
+  /***/ }),
+  /* 19 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var utils = __webpack_require__(2);
+  	
+  	/**
+  	 * Transform the data for a request or a response
+  	 *
+  	 * @param {Object|String} data The data to be transformed
+  	 * @param {Array} headers The headers for the request or response
+  	 * @param {Array|Function} fns A single function or Array of functions
+  	 * @returns {*} The resulting transformed data
+  	 */
+  	module.exports = function transformData(data, headers, fns) {
+  	  /*eslint no-param-reassign:0*/
+  	  utils.forEach(fns, function transform(fn) {
+  	    data = fn(data, headers);
+  	  });
+  	
+  	  return data;
+  	};
+
+
+  /***/ }),
+  /* 20 */
+  /***/ (function(module, exports) {
+  	
+  	module.exports = function isCancel(value) {
+  	  return !!(value && value.__CANCEL__);
+  	};
+
+
+  /***/ }),
+  /* 21 */
+  /***/ (function(module, exports) {
+  	
+  	/**
+  	 * Determines whether the specified URL is absolute
+  	 *
+  	 * @param {string} url The URL to test
+  	 * @returns {boolean} True if the specified URL is absolute, otherwise false
+  	 */
+  	module.exports = function isAbsoluteURL(url) {
+  	  // A URL is considered absolute if it begins with "<scheme>://" or "//" (protocol-relative URL).
+  	  // RFC 3986 defines scheme name as a sequence of characters beginning with a letter and followed
+  	  // by any combination of letters, digits, plus, period, or hyphen.
+  	  return /^([a-z][a-z\d\+\-\.]*:)?\/\//i.test(url);
+  	};
+
+
+  /***/ }),
+  /* 22 */
+  /***/ (function(module, exports) {
+  	
+  	/**
+  	 * Creates a new URL by combining the specified URLs
+  	 *
+  	 * @param {string} baseURL The base URL
+  	 * @param {string} relativeURL The relative URL
+  	 * @returns {string} The combined URL
+  	 */
+  	module.exports = function combineURLs(baseURL, relativeURL) {
+  	  return relativeURL
+  	    ? baseURL.replace(/\/+$/, '') + '/' + relativeURL.replace(/^\/+/, '')
+  	    : baseURL;
+  	};
+
+
+  /***/ }),
+  /* 23 */
+  /***/ (function(module, exports) {
+  	
+  	/**
+  	 * A `Cancel` is an object that is thrown when an operation is canceled.
+  	 *
+  	 * @class
+  	 * @param {string=} message The message.
+  	 */
+  	function Cancel(message) {
+  	  this.message = message;
+  	}
+  	
+  	Cancel.prototype.toString = function toString() {
+  	  return 'Cancel' + (this.message ? ': ' + this.message : '');
+  	};
+  	
+  	Cancel.prototype.__CANCEL__ = true;
+  	
+  	module.exports = Cancel;
+
+
+  /***/ }),
+  /* 24 */
+  /***/ (function(module, exports, __webpack_require__) {
+  	
+  	var Cancel = __webpack_require__(23);
+  	
+  	/**
+  	 * A `CancelToken` is an object that can be used to request cancellation of an operation.
+  	 *
+  	 * @class
+  	 * @param {Function} executor The executor function.
+  	 */
+  	function CancelToken(executor) {
+  	  if (typeof executor !== 'function') {
+  	    throw new TypeError('executor must be a function.');
+  	  }
+  	
+  	  var resolvePromise;
+  	  this.promise = new Promise(function promiseExecutor(resolve) {
+  	    resolvePromise = resolve;
+  	  });
+  	
+  	  var token = this;
+  	  executor(function cancel(message) {
+  	    if (token.reason) {
+  	      // Cancellation has already been requested
+  	      return;
+  	    }
+  	
+  	    token.reason = new Cancel(message);
+  	    resolvePromise(token.reason);
+  	  });
+  	}
+  	
+  	/**
+  	 * Throws a `Cancel` if cancellation has been requested.
+  	 */
+  	CancelToken.prototype.throwIfRequested = function throwIfRequested() {
+  	  if (this.reason) {
+  	    throw this.reason;
+  	  }
+  	};
+  	
+  	/**
+  	 * Returns an object that contains a new `CancelToken` and a function that, when called,
+  	 * cancels the `CancelToken`.
+  	 */
+  	CancelToken.source = function source() {
+  	  var cancel;
+  	  var token = new CancelToken(function executor(c) {
+  	    cancel = c;
+  	  });
+  	  return {
+  	    token: token,
+  	    cancel: cancel
+  	  };
+  	};
+  	
+  	module.exports = CancelToken;
+
+
+  /***/ }),
+  /* 25 */
+  /***/ (function(module, exports) {
+  	
+  	/**
+  	 * Syntactic sugar for invoking a function and expanding an array for arguments.
+  	 *
+  	 * Common use case would be to use `Function.prototype.apply`.
+  	 *
+  	 *  ```js
+  	 *  function f(x, y, z) {}
+  	 *  var args = [1, 2, 3];
+  	 *  f.apply(null, args);
+  	 *  ```
+  	 *
+  	 * With `spread` this example can be re-written.
+  	 *
+  	 *  ```js
+  	 *  spread(function(x, y, z) {})([1, 2, 3]);
+  	 *  ```
+  	 *
+  	 * @param {Function} callback
+  	 * @returns {Function}
+  	 */
+  	module.exports = function spread(callback) {
+  	  return function wrap(arr) {
+  	    return callback.apply(null, arr);
+  	  };
+  	};
+
+
+  /***/ })
+  /******/ ])
+  });
+  //# sourceMappingURL=axios.map
+  });
+
+  var client_id='TWUYXKEMJEFTLQB3VP1OYUFAWV3BFL2NRL3HSTM5L2ULROZR';
+  var client_secret='QRSFUHAXZKQEILJ1XL0OIDYOICOYBKYSYBZ3WF4IID5Y2BDZ';
+
+  var actions = {
+      fetchVenues: function fetchVenues(ref) {
+          var commit = ref.commit;
+          var state = ref.state;
+          var getters = ref.getters;
+          var dispatch = ref.dispatch;
+
+
+          if ("geolocation" in navigator) {
+              commit('geolocatonSupport', { value: true });
+          } else {
+              commit('geolocatonSupport', { value: false });
+              return;
+          }
+
+          commit('requestStatus', { value: 'loading' });
+
+          navigator.geolocation.getCurrentPosition(function(position) {
+              dispatch('requestVenues', {
+                  latitude: position.coords.latitude,
+                  longitude: position.coords.longitude
+              });
+          });
+      },
+      requestVenues: function requestVenues(ref, ref$1) {
+          var commit = ref.commit;
+          var state = ref.state;
+          var getters = ref.getters;
+          var dispatch = ref.dispatch;
+          var latitude = ref$1.latitude;
+          var longitude = ref$1.longitude;
+
+          axios.get('https://api.foursquare.com/v2/venues/explore', {
+              params: {
+                  client_id: client_id,
+                  client_secret: client_secret,
+                  ll:(latitude + "," + longitude),
+                  v: formatDateTimeStamp(),
+              }
+          })
+          .then(function (ref) {
+              var data = ref.data;
+
+              commit('updateVenues', { value: data.response });
+              commit('requestStatus', { value: 'done' });
+          })
+          .catch(function (error) {
+              commit('requestStatus', { value: 'error' });
+              console.log(error);
+          });
+      }
+  };
+
+  function formatDateTimeStamp() {
+      var date = new Date();
+
+      var YYYY = date.getFullYear();
+      var MM = ('0' + date.getMonth() + 1).slice(-2);
+      var DD = ('0' + date.getDate()).slice(-2);
+
+      var timeStamp = "" + YYYY + MM + DD;
+
+      return timeStamp;
+  }
+
+  var mutations = {
+      geolocatonSupport: function geolocatonSupport(state, ref) {
+          var value = ref.value;
+
+          state.geolocatonSupport = value;
+      },
+      requestStatus: function requestStatus(state, ref) {
+          var value = ref.value;
+
+          state.requestStatus = value;
+      },
+      updateVenues: function updateVenues(state, ref) {
+          var value = ref.value;
+
+          state.venueResults = value;
+      }
+  };
+
+  var getters = {
+      displayVenues: function displayVenues(ref, getters) {
+          var venueResults = ref.venueResults;
+
+
+          var venues = [];
+
+          // deep clone without observers
+          var venueObj = JSON.parse(JSON.stringify(venueResults));
+
+          if (venueObj.groups) {
+              venueObj.groups.forEach(function (ref) {
+                  var items = ref.items;
+
+                  items.forEach(function (ref) {
+                      var venue = ref.venue;
+
+                      venues.push(venue);
+                  });
+              });
+          }
+
+          return venues
+      }
+  };
+
+  var foursquare = {
+      namespaced: true,
+      state: state,
+      actions: actions,
+      mutations: mutations,
+      getters: getters,
+  };
+
+  var store = {
+      strict: true,
+      namespaced: true,
+      state: {},
+      modules: {
+          foursquare: foursquare
+      }
   };
 
   //
-  //
-  //
-  //
-
   var script = {
-      data: function data () {
-          return {
-              test: 'hello'
-          }
-      }
+      methods: Object.assign({}, mapActions('foursquare', ['fetchVenues']))
   };
 
   /* script */
@@ -7970,17 +10652,17 @@
     var _vm = this;
     var _h = _vm.$createElement;
     var _c = _vm._self._c || _h;
-    return _c("div", [_vm._v(_vm._s(_vm.test))])
+    return _c("div", [
+      _c("button", { on: { click: _vm.fetchVenues } }, [
+        _vm._v("\n        Check for Venues nearby\n    ")
+      ])
+    ])
   };
   var __vue_staticRenderFns__ = [];
   __vue_render__._withStripped = true;
 
     /* style */
-    var __vue_inject_styles__ = function (inject) {
-      if (!inject) { return }
-      inject("data-v-a9e97d02_0", { source: "\ndiv {\n    background: magenta;\n}\n", map: {"version":3,"sources":["/Users/marcelo/Projects/foursquare-test/src/main.vue"],"names":[],"mappings":";AAeA;IACA,oBAAA;CACA","file":"main.vue","sourcesContent":["<template>\n    <div>{{ test }}</div>\n</template>\n\n<script>\nexport default {\n    data () {\n        return {\n            test: 'hello'\n        }\n    }\n}\n</script>\n\n<style>\ndiv {\n    background: magenta;\n}\n</style>\n"]}, media: undefined });
-
-    };
+    var __vue_inject_styles__ = undefined;
     /* scoped */
     var __vue_scope_id__ = undefined;
     /* module identifier */
@@ -7994,6 +10676,202 @@
       createInjector, createInjectorSSR
     ) {
       var component = (typeof script$$1 === 'function' ? script$$1.options : script$$1) || {};
+
+      // For security concerns, we use only base name in production mode.
+      component.__file = "/Users/marcelo/Projects/foursquare-test/src/components/HeaderControls.vue";
+
+      if (!component.render) {
+        component.render = template.render;
+        component.staticRenderFns = template.staticRenderFns;
+        component._compiled = true;
+
+        if (functional) { component.functional = true; }
+      }
+
+      component._scopeId = scope;
+
+      return component
+    }
+    /* style inject */
+    
+    /* style inject SSR */
+    
+
+    
+    var HeaderControls = __vue_normalize__(
+      { render: __vue_render__, staticRenderFns: __vue_staticRenderFns__ },
+      __vue_inject_styles__,
+      __vue_script__,
+      __vue_scope_id__,
+      __vue_is_functional_template__,
+      __vue_module_identifier__,
+      undefined,
+      undefined
+    );
+
+  //
+
+  var script$1 = {
+      computed: Object.assign({}, mapGetters('foursquare', ['displayVenues']),
+          {venuesFormatted: function venuesFormatted() {
+              var result = this.displayVenues.map(function (venue) {
+                  var location = venue.location;
+                  var name = venue.name;
+                  var photos = venue.photos;
+
+                  return {
+                      name: name,
+                      photos: photos,
+                      formattedAddress: location.formattedAddress
+                  }
+              });
+
+              return result
+          }})
+
+  };
+
+  /* script */
+              var __vue_script__$1 = script$1;
+              
+  /* template */
+  var __vue_render__$1 = function() {
+    var _vm = this;
+    var _h = _vm.$createElement;
+    var _c = _vm._self._c || _h;
+    return _c("div", [
+      _vm.venuesFormatted.length > 0
+        ? _c(
+            "ul",
+            _vm._l(_vm.venuesFormatted, function(venue) {
+              return _c("li", [
+                _c("dl", [
+                  _c("dt", [_vm._v("Name")]),
+                  _vm._v(" "),
+                  _c("dd", [_vm._v(_vm._s(venue.name))]),
+                  _vm._v(" "),
+                  _c("dt", [_vm._v("Address")]),
+                  _vm._v(" "),
+                  _c(
+                    "dd",
+                    _vm._l(venue.formattedAddress, function(addressLine) {
+                      return _c("p", [
+                        _vm._v(
+                          "\n                        " +
+                            _vm._s(addressLine) +
+                            "\n                    "
+                        )
+                      ])
+                    })
+                  ),
+                  _vm._v(" "),
+                  _c("dt", [_vm._v("Photos")]),
+                  _vm._v(" "),
+                  _c("dd", [_vm._v(_vm._s(venue.photos))])
+                ])
+              ])
+            })
+          )
+        : _c("p", [_vm._v("\n        No results yet\n    ")])
+    ])
+  };
+  var __vue_staticRenderFns__$1 = [];
+  __vue_render__$1._withStripped = true;
+
+    /* style */
+    var __vue_inject_styles__$1 = undefined;
+    /* scoped */
+    var __vue_scope_id__$1 = undefined;
+    /* module identifier */
+    var __vue_module_identifier__$1 = undefined;
+    /* functional template */
+    var __vue_is_functional_template__$1 = false;
+    /* component normalizer */
+    function __vue_normalize__$1(
+      template, style, script,
+      scope, functional, moduleIdentifier,
+      createInjector, createInjectorSSR
+    ) {
+      var component = (typeof script === 'function' ? script.options : script) || {};
+
+      // For security concerns, we use only base name in production mode.
+      component.__file = "/Users/marcelo/Projects/foursquare-test/src/components/VenueResults.vue";
+
+      if (!component.render) {
+        component.render = template.render;
+        component.staticRenderFns = template.staticRenderFns;
+        component._compiled = true;
+
+        if (functional) { component.functional = true; }
+      }
+
+      component._scopeId = scope;
+
+      return component
+    }
+    /* style inject */
+    
+    /* style inject SSR */
+    
+
+    
+    var VenueResults = __vue_normalize__$1(
+      { render: __vue_render__$1, staticRenderFns: __vue_staticRenderFns__$1 },
+      __vue_inject_styles__$1,
+      __vue_script__$1,
+      __vue_scope_id__$1,
+      __vue_is_functional_template__$1,
+      __vue_module_identifier__$1,
+      undefined,
+      undefined
+    );
+
+  //
+
+
+  var script$2 = {
+      components: {
+          HeaderControls: HeaderControls,
+          VenueResults: VenueResults
+      },
+      data: function data () {
+          return {
+          }
+      }
+  };
+
+  /* script */
+              var __vue_script__$2 = script$2;
+              
+  /* template */
+  var __vue_render__$2 = function() {
+    var _vm = this;
+    var _h = _vm.$createElement;
+    var _c = _vm._self._c || _h;
+    return _c("div", [_c("HeaderControls"), _vm._v(" "), _c("VenueResults")], 1)
+  };
+  var __vue_staticRenderFns__$2 = [];
+  __vue_render__$2._withStripped = true;
+
+    /* style */
+    var __vue_inject_styles__$2 = function (inject) {
+      if (!inject) { return }
+      inject("data-v-356b8556_0", { source: "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n", map: {"version":3,"sources":[],"names":[],"mappings":"","file":"main.vue"}, media: undefined });
+
+    };
+    /* scoped */
+    var __vue_scope_id__$2 = undefined;
+    /* module identifier */
+    var __vue_module_identifier__$2 = undefined;
+    /* functional template */
+    var __vue_is_functional_template__$2 = false;
+    /* component normalizer */
+    function __vue_normalize__$2(
+      template, style, script,
+      scope, functional, moduleIdentifier,
+      createInjector, createInjectorSSR
+    ) {
+      var component = (typeof script === 'function' ? script.options : script) || {};
 
       // For security concerns, we use only base name in production mode.
       component.__file = "/Users/marcelo/Projects/foursquare-test/src/main.vue";
@@ -8095,13 +10973,13 @@
     
 
     
-    var main = __vue_normalize__(
-      { render: __vue_render__, staticRenderFns: __vue_staticRenderFns__ },
-      __vue_inject_styles__,
-      __vue_script__,
-      __vue_scope_id__,
-      __vue_is_functional_template__,
-      __vue_module_identifier__,
+    var main = __vue_normalize__$2(
+      { render: __vue_render__$2, staticRenderFns: __vue_staticRenderFns__$2 },
+      __vue_inject_styles__$2,
+      __vue_script__$2,
+      __vue_scope_id__$2,
+      __vue_is_functional_template__$2,
+      __vue_module_identifier__$2,
       __vue_create_injector__,
       undefined
     );
