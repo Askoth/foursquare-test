@@ -1,8 +1,8 @@
 <template>
     <div>
-        <ul v-if="venuesFormatted.length > 0">
+        <ul v-if="filteredResults.length > 0">
             <li
-                v-for="venue in venuesFormatted"
+                v-for="venue in filteredResults"
             >
                 <dl>
                     <dt>Name</dt>
@@ -31,20 +31,7 @@ import { mapGetters } from 'vuex';
 
 export default {
     computed: {
-        ...mapGetters('foursquare', ['displayVenues']),
-        venuesFormatted() {
-            const result = this.displayVenues.map((venue) => {
-                const { location, name, photos } = venue;
-
-                return {
-                    name,
-                    photos,
-                    formattedAddress: location.formattedAddress
-                }
-            })
-
-            return result
-        }
+        ...mapGetters('foursquare', ['filteredResults']),
     }
 
 }

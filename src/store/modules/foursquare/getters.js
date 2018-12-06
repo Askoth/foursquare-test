@@ -1,19 +1,16 @@
 export default {
-    displayVenues({ venueResults }, getters) {
+    filteredResults({ venueResults, enabledCategories }, getters) {
+        return venueResults.reduce((prev, cur) => {
 
-        const venues = [];
-
-        // deep clone without observers
-        const venueObj = JSON.parse(JSON.stringify(venueResults));
-
-        if (venueObj.groups) {
-            venueObj.groups.forEach(({ items }) => {
-                items.forEach(({ venue }) => {
-                    venues.push(venue);
-                })
+            let enabled = cur.categories.some(({ id }) => {
+                return enabledCategories.indexOf(id) != -1;
             })
-        }
 
-        return venues
+            if (enabled) {
+                prev.push(cur);
+            }
+
+            return prev;
+        }, [])
     }
 }

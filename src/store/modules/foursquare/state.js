@@ -2,16 +2,14 @@ export default {
     geolocatonSupport: false,
     requestStatus: 'idle', // idle, done, loading, error
     errorMessage: '',
-    venueResults: {
+    enabledCategories: [],
+    categories: {},
+    venueResults: [
         // How it looks like:
 
-        // groups: [{…}]
-        // headerFullLocation: "New York"
-        // headerLocation: "New York"
-        // headerLocationGranularity: "city"
-        // suggestedBounds: {ne: {…}, sw: {…}}
-        // suggestedFilters: {header: "Tap to show:", filters: Array(2)}
-        // suggestedRadius: 907
-        // totalResults: 195
-    }
+        // categories:Array[1]
+        // formattedAddress:Array[3]
+        // id:"4bf39fe8d2fbef3be8a8a4c5"
+        // name:""
+    ]
 }

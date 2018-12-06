@@ -29,15 +29,59 @@ export default {
                 client_secret,
                 ll:`${latitude},${longitude}`,
                 v: formatDateTimeStamp(),
+                limit: 10,
             }
         })
         .then(function ({ data }) {
-            commit('updateVenues', { value: data.response })
+            const venuesData = getVenues(data.response)
+
+            const venues = [];
+            const categories = {};
+            venuesData.forEach((venue) => {
+                const { location, name, id, categories: cats } = venue;
+
+                venues.push({
+                    name,
+                    id,
+                    categories: cats,
+                    formattedAddress: location.formattedAddress,
+                })
+
+                const venueCategories = getCategories(cats);
+
+                Object.assign(categories, venueCategories);
+            })
+
+
+            commit('updateVenues', {
+                venues,
+                categories,
+            })
             commit('requestStatus', { value: 'done' });
+
+            dispatch('fetchVenueDetails')
         })
         .catch(function (error) {
             commit('requestStatus', { value: 'error' });
             console.log(error);
+        })
+    },
+    fetchVenueDetails({ commit, state, getters, dispatch }) {
+        state.venueResults.forEach(({id}) => {
+            axios.get(`https://api.foursquare.com/v2/venues/${id}`, {
+                params: {
+                    client_id,
+                    client_secret,
+                    v: formatDateTimeStamp(),
+                }
+            })
+            .then(function ({ data }) {
+                console.log(data)
+            })
+            .catch(function (error) {
+                commit('requestStatus', { value: 'error' });
+                console.log(error);
+            })
         })
     }
 }
@@ -52,4 +96,33 @@ function formatDateTimeStamp() {
     const timeStamp = `${YYYY}${MM}${DD}`;
 
     return timeStamp;
+}
+
+function getVenues(venueResults) {
+    const venues = [];
+
+    // deep clone without observers
+    const venueObj = JSON.parse(JSON.stringify(venueResults));
+
+    if (venueObj.groups) {
+        venueObj.groups.forEach(({ items }) => {
+            items.forEach(({ venue }) => {
+                venues.push(venue);
+            })
+        })
+    }
+
+    return venues
+}
+
+function getCategories(categories) {
+    const categoriesById = {};
+    categories.forEach(({ id, name }) => {
+        categoriesById[id] = {
+            name,
+            id
+        }
+    })
+
+    return categoriesById
 }

@@ -8937,18 +8937,16 @@
       geolocatonSupport: false,
       requestStatus: 'idle', // idle, done, loading, error
       errorMessage: '',
-      venueResults: {
+      enabledCategories: [],
+      categories: {},
+      venueResults: [
           // How it looks like:
 
-          // groups: [{…}]
-          // headerFullLocation: "New York"
-          // headerLocation: "New York"
-          // headerLocationGranularity: "city"
-          // suggestedBounds: {ne: {…}, sw: {…}}
-          // suggestedFilters: {header: "Tap to show:", filters: Array(2)}
-          // suggestedRadius: 907
-          // totalResults: 195
-      }
+          // categories:Array[1]
+          // formattedAddress:Array[3]
+          // id:"4bf39fe8d2fbef3be8a8a4c5"
+          // name:""
+      ]
   };
 
   var commonjsGlobal = typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
@@ -10551,17 +10549,73 @@
                   client_secret: client_secret,
                   ll:(latitude + "," + longitude),
                   v: formatDateTimeStamp(),
+                  limit: 10,
               }
           })
           .then(function (ref) {
               var data = ref.data;
 
-              commit('updateVenues', { value: data.response });
+              var venuesData = getVenues(data.response);
+
+              var venues = [];
+              var categories = {};
+              venuesData.forEach(function (venue) {
+                  var location = venue.location;
+                  var name = venue.name;
+                  var id = venue.id;
+                  var cats = venue.categories;
+
+                  venues.push({
+                      name: name,
+                      id: id,
+                      categories: cats,
+                      formattedAddress: location.formattedAddress,
+                  });
+
+                  var venueCategories = getCategories(cats);
+
+                  Object.assign(categories, venueCategories);
+              });
+
+
+              commit('updateVenues', {
+                  venues: venues,
+                  categories: categories,
+              });
               commit('requestStatus', { value: 'done' });
+
+              dispatch('fetchVenueDetails');
           })
           .catch(function (error) {
               commit('requestStatus', { value: 'error' });
               console.log(error);
+          });
+      },
+      fetchVenueDetails: function fetchVenueDetails(ref) {
+          var commit = ref.commit;
+          var state = ref.state;
+          var getters = ref.getters;
+          var dispatch = ref.dispatch;
+
+          state.venueResults.forEach(function (ref) {
+              var id = ref.id;
+
+              axios.get(("https://api.foursquare.com/v2/venues/" + id), {
+                  params: {
+                      client_id: client_id,
+                      client_secret: client_secret,
+                      v: formatDateTimeStamp(),
+                  }
+              })
+              .then(function (ref) {
+                  var data = ref.data;
+
+                  console.log(data);
+              })
+              .catch(function (error) {
+                  commit('requestStatus', { value: 'error' });
+                  console.log(error);
+              });
           });
       }
   };
@@ -10578,6 +10632,42 @@
       return timeStamp;
   }
 
+  function getVenues(venueResults) {
+      var venues = [];
+
+      // deep clone without observers
+      var venueObj = JSON.parse(JSON.stringify(venueResults));
+
+      if (venueObj.groups) {
+          venueObj.groups.forEach(function (ref) {
+              var items = ref.items;
+
+              items.forEach(function (ref) {
+                  var venue = ref.venue;
+
+                  venues.push(venue);
+              });
+          });
+      }
+
+      return venues
+  }
+
+  function getCategories(categories) {
+      var categoriesById = {};
+      categories.forEach(function (ref) {
+          var id = ref.id;
+          var name = ref.name;
+
+          categoriesById[id] = {
+              name: name,
+              id: id
+          };
+      });
+
+      return categoriesById
+  }
+
   var mutations = {
       geolocatonSupport: function geolocatonSupport(state, ref) {
           var value = ref.value;
@@ -10590,35 +10680,37 @@
           state.requestStatus = value;
       },
       updateVenues: function updateVenues(state, ref) {
-          var value = ref.value;
+          var venues = ref.venues;
+          var categories = ref.categories;
 
-          state.venueResults = value;
+          state.venueResults = venues;
+          state.categories = categories;
+          state.enabledCategories = Object.keys(categories);
+      },
+      updateEnabledCategories: function updateEnabledCategories(state, value) {
+          state.enabledCategories = value;
       }
   };
 
   var getters = {
-      displayVenues: function displayVenues(ref, getters) {
+      filteredResults: function filteredResults(ref, getters) {
           var venueResults = ref.venueResults;
+          var enabledCategories = ref.enabledCategories;
 
+          return venueResults.reduce(function (prev, cur) {
 
-          var venues = [];
+              var enabled = cur.categories.some(function (ref) {
+                  var id = ref.id;
 
-          // deep clone without observers
-          var venueObj = JSON.parse(JSON.stringify(venueResults));
-
-          if (venueObj.groups) {
-              venueObj.groups.forEach(function (ref) {
-                  var items = ref.items;
-
-                  items.forEach(function (ref) {
-                      var venue = ref.venue;
-
-                      venues.push(venue);
-                  });
+                  return enabledCategories.indexOf(id) != -1;
               });
-          }
 
-          return venues
+              if (enabled) {
+                  prev.push(cur);
+              }
+
+              return prev;
+          }, [])
       }
   };
 
@@ -10641,7 +10733,17 @@
 
   //
   var script = {
-      methods: Object.assign({}, mapActions('foursquare', ['fetchVenues']))
+      computed: Object.assign({}, mapState('foursquare', ['venueResults', 'categories', 'enabledCategories']),
+          {filteredCategories: {
+              set: function set(value) {
+                  this.updateEnabledCategories(value);
+              },
+              get: function get() {
+                  return this.enabledCategories
+              }
+          }}),
+      methods: Object.assign({}, mapActions('foursquare', ['fetchVenues']),
+          mapMutations('foursquare', ['updateEnabledCategories']))
   };
 
   /* script */
@@ -10653,16 +10755,74 @@
     var _h = _vm.$createElement;
     var _c = _vm._self._c || _h;
     return _c("div", [
-      _c("button", { on: { click: _vm.fetchVenues } }, [
-        _vm._v("\n        Check for Venues nearby\n    ")
-      ])
+      _c(
+        "button",
+        { staticClass: "btn fetch-btn", on: { click: _vm.fetchVenues } },
+        [_vm._v("\n        Check for Venues nearby\n    ")]
+      ),
+      _vm._v(" "),
+      _c(
+        "ul",
+        { staticClass: "filter-list" },
+        _vm._l(_vm.categories, function(cat) {
+          return _c("li", { staticClass: "filter-item" }, [
+            _c("label", { staticClass: "btn filter-btn" }, [
+              _vm._v(
+                "\n                " + _vm._s(cat.name) + "\n                "
+              ),
+              _c("input", {
+                directives: [
+                  {
+                    name: "model",
+                    rawName: "v-model",
+                    value: _vm.filteredCategories,
+                    expression: "filteredCategories"
+                  }
+                ],
+                attrs: { type: "checkbox", name: "categories" },
+                domProps: {
+                  value: cat.id,
+                  checked: Array.isArray(_vm.filteredCategories)
+                    ? _vm._i(_vm.filteredCategories, cat.id) > -1
+                    : _vm.filteredCategories
+                },
+                on: {
+                  change: function($event) {
+                    var $$a = _vm.filteredCategories,
+                      $$el = $event.target,
+                      $$c = $$el.checked ? true : false;
+                    if (Array.isArray($$a)) {
+                      var $$v = cat.id,
+                        $$i = _vm._i($$a, $$v);
+                      if ($$el.checked) {
+                        $$i < 0 && (_vm.filteredCategories = $$a.concat([$$v]));
+                      } else {
+                        $$i > -1 &&
+                          (_vm.filteredCategories = $$a
+                            .slice(0, $$i)
+                            .concat($$a.slice($$i + 1)));
+                      }
+                    } else {
+                      _vm.filteredCategories = $$c;
+                    }
+                  }
+                }
+              })
+            ])
+          ])
+        })
+      )
     ])
   };
   var __vue_staticRenderFns__ = [];
   __vue_render__._withStripped = true;
 
     /* style */
-    var __vue_inject_styles__ = undefined;
+    var __vue_inject_styles__ = function (inject) {
+      if (!inject) { return }
+      inject("data-v-7a1b48b5_0", { source: "\n.btn {\n    box-sizing: border-box;\n    padding: 10px;\n    margin: 10px 5px;\n    background: white;\n    color: black;\n}\n.fetch-btn {\n    margin-bottom: 20px;\n}\n.filter-list {\n    display: flex;\n    flex-wrap: wrap;\n}\n.filter-item {\n    display: block;\n    flex-shrink: 0;\n}\n.filter-btn {\n    display: block;\n    white-space: nowrap;\n}\n", map: {"version":3,"sources":["/Users/marcelo/Projects/foursquare-test/src/components/HeaderControls.vue"],"names":[],"mappings":";AAwCA;IACA,uBAAA;IACA,cAAA;IACA,iBAAA;IACA,kBAAA;IACA,aAAA;CACA;AAEA;IACA,oBAAA;CACA;AAEA;IACA,cAAA;IACA,gBAAA;CACA;AAEA;IACA,eAAA;IACA,eAAA;CACA;AAEA;IACA,eAAA;IACA,oBAAA;CACA","file":"HeaderControls.vue","sourcesContent":["<template>\n    <div>\n        <button @click=\"fetchVenues\" class=\"btn fetch-btn\">\n            Check for Venues nearby\n        </button>\n\n        <ul class=\"filter-list\">\n            <li v-for=\"cat in categories\" class=\"filter-item\">\n                <label class=\"btn filter-btn\">\n                    {{ cat.name }}\n                    <input type=\"checkbox\" v-model=\"filteredCategories\" name=\"categories\" :value=\"cat.id\">\n                </label>\n            </li>\n        </ul>\n    </div>\n</template>\n\n<script>\nimport { mapActions, mapState, mapMutations } from 'vuex';\nexport default {\n    computed: {\n        ...mapState('foursquare', ['venueResults', 'categories', 'enabledCategories']),\n        filteredCategories: {\n            set(value) {\n                this.updateEnabledCategories(value)\n            },\n            get() {\n                return this.enabledCategories\n            }\n        }\n    },\n    methods: {\n        ...mapActions('foursquare', ['fetchVenues']),\n        ...mapMutations('foursquare', ['updateEnabledCategories'])\n    }\n}\n\n</script>\n\n<style>\n.btn {\n    box-sizing: border-box;\n    padding: 10px;\n    margin: 10px 5px;\n    background: white;\n    color: black;\n}\n\n.fetch-btn {\n    margin-bottom: 20px;\n}\n\n.filter-list {\n    display: flex;\n    flex-wrap: wrap;\n}\n\n.filter-item {\n    display: block;\n    flex-shrink: 0;\n}\n\n.filter-btn {\n    display: block;\n    white-space: nowrap;\n}\n</style>\n"]}, media: undefined });
+
+    };
     /* scoped */
     var __vue_scope_id__ = undefined;
     /* module identifier */
@@ -10690,10 +10850,89 @@
 
       component._scopeId = scope;
 
+      {
+        var hook;
+        if (style) {
+          hook = function(context) {
+            style.call(this, createInjector(context));
+          };
+        }
+
+        if (hook !== undefined) {
+          if (component.functional) {
+            // register for functional component in vue file
+            var originalRender = component.render;
+            component.render = function renderWithStyleInjection(h, context) {
+              hook.call(context);
+              return originalRender(h, context)
+            };
+          } else {
+            // inject component registration as beforeCreate hook
+            var existing = component.beforeCreate;
+            component.beforeCreate = existing ? [].concat(existing, hook) : [hook];
+          }
+        }
+      }
+
       return component
     }
     /* style inject */
-    
+    function __vue_create_injector__() {
+      var head = document.head || document.getElementsByTagName('head')[0];
+      var styles = __vue_create_injector__.styles || (__vue_create_injector__.styles = {});
+      var isOldIE =
+        typeof navigator !== 'undefined' &&
+        /msie [6-9]\\b/.test(navigator.userAgent.toLowerCase());
+
+      return function addStyle(id, css) {
+        if (document.querySelector('style[data-vue-ssr-id~="' + id + '"]')) { return } // SSR styles are present.
+
+        var group = isOldIE ? css.media || 'default' : id;
+        var style = styles[group] || (styles[group] = { ids: [], parts: [], element: undefined });
+
+        if (!style.ids.includes(id)) {
+          var code = css.source;
+          var index = style.ids.length;
+
+          style.ids.push(id);
+
+          if (isOldIE) {
+            style.element = style.element || document.querySelector('style[data-group=' + group + ']');
+          }
+
+          if (!style.element) {
+            var el = style.element = document.createElement('style');
+            el.type = 'text/css';
+
+            if (css.media) { el.setAttribute('media', css.media); }
+            if (isOldIE) {
+              el.setAttribute('data-group', group);
+              el.setAttribute('data-next-index', '0');
+            }
+
+            head.appendChild(el);
+          }
+
+          if (isOldIE) {
+            index = parseInt(style.element.getAttribute('data-next-index'));
+            style.element.setAttribute('data-next-index', index + 1);
+          }
+
+          if (style.element.styleSheet) {
+            style.parts.push(code);
+            style.element.styleSheet.cssText = style.parts
+              .filter(Boolean)
+              .join('\n');
+          } else {
+            var textNode = document.createTextNode(code);
+            var nodes = style.element.childNodes;
+            if (nodes[index]) { style.element.removeChild(nodes[index]); }
+            if (nodes.length) { style.element.insertBefore(textNode, nodes[index]); }
+            else { style.element.appendChild(textNode); }
+          }
+        }
+      }
+    }
     /* style inject SSR */
     
 
@@ -10705,29 +10944,14 @@
       __vue_scope_id__,
       __vue_is_functional_template__,
       __vue_module_identifier__,
-      undefined,
+      __vue_create_injector__,
       undefined
     );
 
   //
 
   var script$1 = {
-      computed: Object.assign({}, mapGetters('foursquare', ['displayVenues']),
-          {venuesFormatted: function venuesFormatted() {
-              var result = this.displayVenues.map(function (venue) {
-                  var location = venue.location;
-                  var name = venue.name;
-                  var photos = venue.photos;
-
-                  return {
-                      name: name,
-                      photos: photos,
-                      formattedAddress: location.formattedAddress
-                  }
-              });
-
-              return result
-          }})
+      computed: Object.assign({}, mapGetters('foursquare', ['filteredResults']))
 
   };
 
@@ -10740,10 +10964,10 @@
     var _h = _vm.$createElement;
     var _c = _vm._self._c || _h;
     return _c("div", [
-      _vm.venuesFormatted.length > 0
+      _vm.filteredResults.length > 0
         ? _c(
             "ul",
-            _vm._l(_vm.venuesFormatted, function(venue) {
+            _vm._l(_vm.filteredResults, function(venue) {
               return _c("li", [
                 _c("dl", [
                   _c("dt", [_vm._v("Name")]),
@@ -10848,7 +11072,18 @@
     var _vm = this;
     var _h = _vm.$createElement;
     var _c = _vm._self._c || _h;
-    return _c("div", [_c("HeaderControls"), _vm._v(" "), _c("VenueResults")], 1)
+    return _c(
+      "div",
+      { staticClass: "app" },
+      [
+        _c("div", { staticClass: "header" }, [_vm._v("My Awesome App")]),
+        _vm._v(" "),
+        _c("HeaderControls", { staticClass: "controls" }),
+        _vm._v(" "),
+        _c("VenueResults", { staticClass: "venues" })
+      ],
+      1
+    )
   };
   var __vue_staticRenderFns__$2 = [];
   __vue_render__$2._withStripped = true;
@@ -10856,7 +11091,7 @@
     /* style */
     var __vue_inject_styles__$2 = function (inject) {
       if (!inject) { return }
-      inject("data-v-356b8556_0", { source: "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n", map: {"version":3,"sources":[],"names":[],"mappings":"","file":"main.vue"}, media: undefined });
+      inject("data-v-6772fc32_0", { source: "\nhtml, body {\n    margin: 0;\n    padding: 0;\n}\nul, li {\n    list-style-type: none;\n    padding: 0;\n    margin: 0;\n}\n:root {\n    --header-color: #00113d;\n    --controls-color: #0732a2;\n    --venue-color: #efeff4;\n    --title-color: #efefef;\n    --padding: 10px;\n}\n.app {\n    display: grid;\n    grid-template-columns: auto 370px;\n    grid-template-rows: min-content auto;\n    grid-template-areas:\n    \"grid-header grid-header\"\n    \"grid-venues grid-controls\";\n        height: 100vh;\n}\n.header {\n    grid-area: grid-header;\n    background: var(--header-color);\n    color: var(--title-color);\n    font-family: Tahoma;\n    padding: var(--padding);\n    font-size: 25px;\n}\n.controls {\n    grid-area: grid-controls;\n    background: var(--controls-color);\n    padding: var(--padding);\n}\n.venues {\n    grid-area: grid-venues;\n    background: var(--venue-color);\n    padding: var(--padding);\n}\n\n", map: {"version":3,"sources":["/Users/marcelo/Projects/foursquare-test/src/main.vue"],"names":[],"mappings":";AA2BA;IACA,UAAA;IACA,WAAA;CACA;AAEA;IACA,sBAAA;IACA,WAAA;IACA,UAAA;CACA;AAEA;IACA,wBAAA;IACA,0BAAA;IACA,uBAAA;IACA,uBAAA;IACA,gBAAA;CACA;AAEA;IACA,cAAA;IACA,kCAAA;IACA,qCAAA;IACA;;gCAEA;QACA,cAAA;CACA;AAEA;IACA,uBAAA;IACA,gCAAA;IACA,0BAAA;IACA,oBAAA;IACA,wBAAA;IACA,gBAAA;CACA;AAEA;IACA,yBAAA;IACA,kCAAA;IACA,wBAAA;CACA;AAEA;IACA,uBAAA;IACA,+BAAA;IACA,wBAAA;CACA","file":"main.vue","sourcesContent":["<template>\n    <div class=\"app\">\n        <div class=\"header\">My Awesome App</div>\n        <HeaderControls class=\"controls\" />\n        <VenueResults class=\"venues\" />\n    </div>\n</template>\n\n<script>\nimport HeaderControls from '@components/HeaderControls.vue';\nimport VenueResults from '@components/VenueResults.vue';\n\n\nexport default {\n    components: {\n        HeaderControls,\n        VenueResults\n    },\n    data () {\n        return {\n        }\n    }\n}\n</script>\n\n<style>\n\nhtml, body {\n    margin: 0;\n    padding: 0;\n}\n\nul, li {\n    list-style-type: none;\n    padding: 0;\n    margin: 0;\n}\n\n:root {\n    --header-color: #00113d;\n    --controls-color: #0732a2;\n    --venue-color: #efeff4;\n    --title-color: #efefef;\n    --padding: 10px;\n}\n\n.app {\n    display: grid;\n    grid-template-columns: auto 370px;\n    grid-template-rows: min-content auto;\n    grid-template-areas:\n    \"grid-header grid-header\"\n    \"grid-venues grid-controls\";\n        height: 100vh;\n}\n\n.header {\n    grid-area: grid-header;\n    background: var(--header-color);\n    color: var(--title-color);\n    font-family: Tahoma;\n    padding: var(--padding);\n    font-size: 25px;\n}\n\n.controls {\n    grid-area: grid-controls;\n    background: var(--controls-color);\n    padding: var(--padding);\n}\n\n.venues {\n    grid-area: grid-venues;\n    background: var(--venue-color);\n    padding: var(--padding);\n}\n\n</style>\n"]}, media: undefined });
 
     };
     /* scoped */
@@ -10913,9 +11148,9 @@
       return component
     }
     /* style inject */
-    function __vue_create_injector__() {
+    function __vue_create_injector__$1() {
       var head = document.head || document.getElementsByTagName('head')[0];
-      var styles = __vue_create_injector__.styles || (__vue_create_injector__.styles = {});
+      var styles = __vue_create_injector__$1.styles || (__vue_create_injector__$1.styles = {});
       var isOldIE =
         typeof navigator !== 'undefined' &&
         /msie [6-9]\\b/.test(navigator.userAgent.toLowerCase());
@@ -10980,7 +11215,7 @@
       __vue_scope_id__$2,
       __vue_is_functional_template__$2,
       __vue_module_identifier__$2,
-      __vue_create_injector__,
+      __vue_create_injector__$1,
       undefined
     );
 
