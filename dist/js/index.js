@@ -10506,8 +10506,218 @@
   /***/ })
   /******/ ])
   });
-
+  //# sourceMappingURL=axios.map
   });
+
+  var venue = {
+  	id: "49eeaf08f964a52078681fe3",
+  	name: "Vanessa's Dumpling House",
+  	contact: {
+  		phone: "+12126258008",
+  		formattedPhone: "+1 212-625-8008",
+  		twitter: "vanessadumpling",
+  		facebook: "460834103959975",
+  		facebookUsername: "VanessasDumplings",
+  		facebookName: "Vanessa's Dumpling House"
+  	},
+  	location: {
+  		address: "118 Eldridge St",
+  		crossStreet: "btwn Broome & Grand St",
+  		lat: 40.718301364039064,
+  		lng: -73.99192996850243,
+  		postalCode: "10002",
+  		cc: "US",
+  		city: "New York",
+  		state: "NY",
+  		country: "United States",
+  		formattedAddress: [
+  			"118 Eldridge St (btwn Broome & Grand St)",
+  			"New York, NY 10002",
+  			"United States"
+  		]
+  	},
+  	canonicalUrl: "https://foursquare.com/v/vanessas-dumpling-house/49eeaf08f964a52078681fe3",
+  	categories: [
+  		{
+  			id: "4bf58dd8d48988d108941735",
+  			name: "Dumpling Restaurant",
+  			pluralName: "Dumpling Restaurants",
+  			shortName: "Dumplings",
+  			icon: {
+  				prefix: "https://ss3.4sqi.net/img/categories_v2/food/dumplings_",
+  				suffix: ".png"
+  			},
+  			primary: true
+  		},
+  		{
+  			id: "4bf58dd8d48988d145941735",
+  			name: "Chinese Restaurant",
+  			pluralName: "Chinese Restaurants",
+  			shortName: "Chinese",
+  			icon: {
+  				prefix: "https://ss3.4sqi.net/img/categories_v2/food/asian_",
+  				suffix: ".png"
+  			}
+  		}
+  	],
+  	verified: true,
+  	stats: {
+  		tipCount: 398,
+  		usersCount: 17529,
+  		checkinsCount: 26470,
+  		visitsCount: 34250
+  	},
+  	url: "http://vanessas.com",
+  	price: {
+  		tier: 1,
+  		message: "Cheap",
+  		currency: "$"
+  	},
+  	hasMenu: true,
+  	likes: {
+  	},
+  	like: false,
+  	dislike: false,
+  	ok: false,
+  	rating: 9,
+  	ratingColor: "00B551",
+  	ratingSignals: 1604,
+  	menu: {
+  	},
+  	allowMenuUrlEdit: true,
+  	beenHere: {
+  	},
+  	specials: {
+  	},
+  	photos: {
+  		count: 653,
+  		groups: [
+  			{
+  				type: "checkin",
+  				name: "Friends' check-in photos",
+  				count: 0,
+  				items: [
+  				]
+  			},
+  			{
+  				type: "venue",
+  				name: "Venue photos",
+  				count: 653,
+  				items: [
+  					{
+  						id: "51ef21fd498e4581e031d42c",
+  						createdAt: 1374626301,
+  						source: {
+  							name: "Foursquare for iOS",
+  							url: "https://foursquare.com/download/#/iphone"
+  						},
+  						prefix: "https://fastly.4sqi.net/img/general/",
+  						suffix: "/6036_Xv3VOJm0A8HMF8EbQWdKPXIce7LxcvXOMt4_nW5gDhU.jpg",
+  						width: 960,
+  						height: 720,
+  						user: {
+  							id: "6036",
+  							firstName: "lia",
+  							lastName: "bulaong",
+  							gender: "female",
+  							photo: {
+  								prefix: "https://fastly.4sqi.net/img/user/",
+  								suffix: "/3HD2YT2UJ2AI0TXU.jpg"
+  							}
+  						},
+  						visibility: "public"
+  					}
+  				]
+  			}
+  		],
+  		summary: "0 photos"
+  	},
+  	reasons: {
+  	},
+  	page: {
+  		pageInfo: {
+  			description: "Serving up the best dumplings, noodles and sesame pancakes in New York City www.vanessas.com",
+  			banner: "https://is1.4sqi.net/userpix/GUWJ2Q0M1C4JSXYH.jpg",
+  			links: {
+  				count: 1,
+  				items: [
+  					{
+  						url: "http://vanessas.com"
+  					}
+  				]
+  			}
+  		},
+  		user: {
+  			id: "77656914",
+  			firstName: "Vanessa's",
+  			gender: "none",
+  			photo: {
+  				prefix: "https://fastly.4sqi.net/img/user/",
+  				suffix: "/77656914-DG5ZFMPAP1PCUE5P.jpg"
+  			},
+  			type: "chain",
+  			tips: {
+  				count: 0
+  			},
+  			lists: {
+  				groups: [
+  					{
+  						type: "created",
+  						count: 2,
+  						items: [
+  						]
+  					}
+  				]
+  			},
+  			homeCity: "Brooklyn, NY",
+  			bio: "",
+  			contact: {
+  				twitter: "vanessadumpling"
+  			}
+  		}
+  	},
+  	hereNow: {
+  	},
+  	createdAt: 1240379144,
+  	tips: {
+  	},
+  	shortUrl: "http://4sq.com/4rsV0l",
+  	timeZone: "America/New_York",
+  	listed: {
+  	},
+  	phrases: [
+  	],
+  	hours: {
+  	},
+  	popular: {
+  	},
+  	pageUpdates: {
+  	},
+  	inbox: {
+  	},
+  	venueChains: [
+  	],
+  	attributes: {
+  	},
+  	bestPhoto: {
+  		id: "51ef21fd498e4581e031d42c",
+  		createdAt: 1374626301,
+  		source: {
+  			name: "Foursquare for iOS",
+  			url: "https://foursquare.com/download/#/iphone"
+  		},
+  		prefix: "https://fastly.4sqi.net/img/general/",
+  		suffix: "/6036_Xv3VOJm0A8HMF8EbQWdKPXIce7LxcvXOMt4_nW5gDhU.jpg",
+  		width: 960,
+  		height: 720,
+  		visibility: "public"
+  	},
+  	colors: {
+  	}
+  };
+  var mockedDetails = {
+  	venue: venue
+  };
 
   var client_id='TWUYXKEMJEFTLQB3VP1OYUFAWV3BFL2NRL3HSTM5L2ULROZR';
   var client_secret='QRSFUHAXZKQEILJ1XL0OIDYOICOYBKYSYBZ3WF4IID5Y2BDZ';
@@ -10605,35 +10815,60 @@
               var id = ref.id;
 
               if (typeof state.venueDetails[id] == 'undefined') { // memory cache, could also use session
-                  // const {
-                  //     canonicalUrl,
-                  //     price,
-                  //     bestPhoto,
-                  // } = getMockedDetails();
+                  if (shouldUseMocked()) {
+                      var ref$1 = getMockedDetails();
+                      var canonicalUrl = ref$1.canonicalUrl;
+                      var price = ref$1.price;
+                      var bestPhoto = ref$1.bestPhoto;
 
-                  // commit('addVenueDetails', {
-                  //     id,
-                  //     canonicalUrl,
-                  //     price,
-                  //     bestPhoto,
-                  //     mocked: true
-                  // })
+                      commit('addVenueDetails', {
+                          id: id,
+                          canonicalUrl: canonicalUrl,
+                          price: price,
+                          bestPhoto: bestPhoto,
+                          mocked: true
+                      });
+                  } else {
+                      axios.get(("https://api.foursquare.com/v2/venues/" + id), {
+                          params: {
+                              client_id: client_id,
+                              client_secret: client_secret,
+                              v: formatDateTimeStamp(),
+                          }
+                      })
+                      .then(function (ref) {
+                          var data = ref.data;
 
-                  axios.get(("https://api.foursquare.com/v2/venues/" + id), {
-                      params: {
-                          client_id: client_id,
-                          client_secret: client_secret,
-                          v: formatDateTimeStamp(),
-                      }
-                  })
-                  .then(function (ref) {
-                      var data = ref.data;
+                          var ref$1 = data.response.venue;
+                          var canonicalUrl = ref$1.canonicalUrl;
+                          var price = ref$1.price;
+                          var bestPhoto = ref$1.bestPhoto;
 
-                      console.log(data);
-                  })
-                  .catch(function (error) {
-                      console.log(error);
-                  });
+                          commit('addVenueDetails', {
+                              id: id,
+                              canonicalUrl: canonicalUrl,
+                              price: price,
+                              bestPhoto: bestPhoto,
+                              mocked: true
+                          });
+                      })
+                      .catch(function (error) {
+                          var response = error.response;
+                          if (response.status) {
+                              commit('addVenueDetails', {
+                                  id: id,
+                                  canonicalUrl: '',
+                                  price: {},
+                                  bestPhoto: {},
+                                  mocked: true,
+                                  error: 'Error Too many Requests'
+                              });
+                          } else {
+                              console.log(error);
+                          }
+                      });
+                  }
+
               }
           });
       }
@@ -10685,6 +10920,25 @@
       });
 
       return categoriesById
+  }
+
+
+  function getMockedDetails() {
+      return mockedDetails.venue;
+  }
+
+  function shouldUseMocked() {
+      var queryString = window.location.search.substring(1).split('&').reduce(function (prev, cur) {
+          var ref = cur.split('=');
+          var key = ref[0];
+          var value = ref[1];
+
+          prev[key] = value;
+
+          return prev;
+      }, {});
+
+      return queryString.mock == 1;
   }
 
   var mutations = {
@@ -10997,6 +11251,9 @@
           url: function url() {
               return this.venueDetails.canonicalUrl
           },
+          error: function error() {
+              return this.venueDetails.error || ''
+          },
           bestPhoto: function bestPhoto() {
               return this.createPhotoUrl(this.venueDetails.bestPhoto)
           }}),
@@ -11023,6 +11280,12 @@
     var _h = _vm.$createElement;
     var _c = _vm._self._c || _h;
     return _c("div", { staticClass: "venue-card" }, [
+      _vm.error.length > 0
+        ? _c("div", { staticClass: "error" }, [
+            _vm._v("\n        " + _vm._s(_vm.error) + "\n    ")
+          ])
+        : _vm._e(),
+      _vm._v(" "),
       _c("h2", { staticClass: "venue-name" }, [
         _vm.url.length > 0
           ? _c("a", { staticClass: "venue-link", attrs: { href: _vm.url } }, [
@@ -11065,7 +11328,7 @@
     /* style */
     var __vue_inject_styles__$1 = function (inject) {
       if (!inject) { return }
-      inject("data-v-29ea1d72_0", { source: "\n.venue-card {\n    background: white;\n    box-shadow: 0 0 10px 1px rgba(0,0,0,0.1);\n    padding: 10px;\n    height: 100%;\n    width: 100%;\n    font-family: tahoma;\n    box-sizing: border-box;\n}\n.venue-name {\n    margin: 0 0 10px;\n    font-size: 18px;\n    min-height: 2.8em;\n}\n.venue-link {\n    color: #000;\n}\n.venue-link:visited {\n    color: #444;\n}\n.venue-link:hover, .venue-link:active, {\n    color: inherit;\n}\n.address {\n    font-size: 14px;\n    margin: 10px 0;\n}\n.address-line {\n    display: block;\n}\n.best-photo {\n    width: 100%;\n    height: 200px;\n    background-color: #DDD;\n    background-size: cover;\n}\n.no-picture-text {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n", map: {"version":3,"sources":["/Users/marcelo/Projects/foursquare-test/src/components/VenueCard.vue"],"names":[],"mappings":";AAsFA;IACA,kBAAA;IACA,yCAAA;IACA,cAAA;IACA,aAAA;IACA,YAAA;IACA,oBAAA;IACA,uBAAA;CACA;AAEA;IACA,iBAAA;IACA,gBAAA;IACA,kBAAA;CACA;AAEA;IACA,YAAA;CACA;AAEA;IACA,YAAA;CACA;AAEA;IACA,eAAA;CACA;AAEA;IACA,gBAAA;IACA,eAAA;CACA;AAEA;IACA,eAAA;CACA;AAEA;IACA,YAAA;IACA,cAAA;IACA,uBAAA;IACA,uBAAA;CACA;AAEA;IACA,cAAA;IACA,oBAAA;IACA,wBAAA;CACA","file":"VenueCard.vue","sourcesContent":["<template>\n    <div class=\"venue-card\">\n        <h2 class=\"venue-name\">\n            <a\n                v-if=\"url.length > 0\"\n                :href=\"url\"\n                class=\"venue-link\"\n            >\n                {{ name }}\n            </a>\n            <span v-else>\n                {{ name }}\n            </span>\n        </h2>\n\n        <div class=\"image\">\n            <img\n                v-if=\"bestPhoto.length > 0\"\n                class=\"best-photo\"\n                :src=\"bestPhoto\"\n                :alt=\"`${name} best image`\"\n            >\n            <div\n                v-else\n                class=\"best-photo no-picture-text\"\n            >\n                No picture\n            </div>\n        </div>\n\n        <div class=\"address\">\n            <span\n                v-for=\"addressLine in formattedAddress\"\n                class=\"address-line\"\n            >\n                {{ addressLine }}\n            </span>\n        </div>\n\n        <div v-if=\"!!price\">\n            Price: {{ price }}\n        </div>\n    </div>\n</template>\n\n<script>\nimport { mapState } from 'vuex';\n\nexport default {\n    props: [ 'categories', 'formattedAddress', 'id', 'name' ],\n    computed: {\n        ...mapState('foursquare', {\n            venueDetails (state) {\n                const emptyObj = {\n                    canonicalUrl: '',\n                    price: {},\n                    bestPhoto: {},\n                    mocked: true\n                };\n\n                return typeof state.venueDetails[this.id] != 'undefined' ? state.venueDetails[this.id] : emptyObj\n            }\n        }),\n        price() {\n            return this.venueDetails.price.message || null\n        },\n        url() {\n            return this.venueDetails.canonicalUrl\n        },\n        bestPhoto() {\n            return this.createPhotoUrl(this.venueDetails.bestPhoto)\n        }\n    },\n    methods: {\n        createPhotoUrl({ prefix='', suffix='' }) {\n            if (prefix.length == 0) {\n                return ''\n            }\n\n            return `${prefix}300x300${suffix}`;\n        }\n    }\n}\n</script>\n\n<style>\n.venue-card {\n    background: white;\n    box-shadow: 0 0 10px 1px rgba(0,0,0,0.1);\n    padding: 10px;\n    height: 100%;\n    width: 100%;\n    font-family: tahoma;\n    box-sizing: border-box;\n}\n\n.venue-name {\n    margin: 0 0 10px;\n    font-size: 18px;\n    min-height: 2.8em;\n}\n\n.venue-link {\n    color: #000;\n}\n\n.venue-link:visited {\n    color: #444;\n}\n\n.venue-link:hover, .venue-link:active, {\n    color: inherit;\n}\n\n.address {\n    font-size: 14px;\n    margin: 10px 0;\n}\n\n.address-line {\n    display: block;\n}\n\n.best-photo {\n    width: 100%;\n    height: 200px;\n    background-color: #DDD;\n    background-size: cover;\n}\n\n.no-picture-text {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n</style>\n"]}, media: undefined });
+      inject("data-v-b84889ac_0", { source: "\n.venue-card {\n    background: white;\n    box-shadow: 0 0 10px 1px rgba(0,0,0,0.1);\n    padding: 10px;\n    height: 100%;\n    width: 100%;\n    font-family: tahoma;\n    box-sizing: border-box;\n}\n.venue-name {\n    margin: 0 0 10px;\n    font-size: 18px;\n    min-height: 2.8em;\n}\n.venue-link {\n    color: #000;\n}\n.venue-link:visited {\n    color: #444;\n}\n.venue-link:hover, .venue-link:active, {\n    color: inherit;\n}\n.address {\n    font-size: 14px;\n    margin: 10px 0;\n}\n.address-line {\n    display: block;\n}\n.best-photo {\n    width: 100%;\n    height: 200px;\n    background-color: #DDD;\n    background-size: cover;\n}\n.no-picture-text {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n.error {\n    border: 1px solid #F00;\n    background: #f7e9e9;\n    color: #F00;\n    font-family: Tahoma;\n    font-size: 12px;\n    margin: 0 0 5px;\n    padding: 5px;\n}\n", map: {"version":3,"sources":["/Users/marcelo/Projects/foursquare-test/src/components/VenueCard.vue"],"names":[],"mappings":";AA4FA;IACA,kBAAA;IACA,yCAAA;IACA,cAAA;IACA,aAAA;IACA,YAAA;IACA,oBAAA;IACA,uBAAA;CACA;AAEA;IACA,iBAAA;IACA,gBAAA;IACA,kBAAA;CACA;AAEA;IACA,YAAA;CACA;AAEA;IACA,YAAA;CACA;AAEA;IACA,eAAA;CACA;AAEA;IACA,gBAAA;IACA,eAAA;CACA;AAEA;IACA,eAAA;CACA;AAEA;IACA,YAAA;IACA,cAAA;IACA,uBAAA;IACA,uBAAA;CACA;AAEA;IACA,cAAA;IACA,oBAAA;IACA,wBAAA;CACA;AAEA;IACA,uBAAA;IACA,oBAAA;IACA,YAAA;IACA,oBAAA;IACA,gBAAA;IACA,gBAAA;IACA,aAAA;CACA","file":"VenueCard.vue","sourcesContent":["<template>\n    <div class=\"venue-card\">\n        <div class=\"error\" v-if=\"error.length > 0\">\n            {{ error }}\n        </div>\n        <h2 class=\"venue-name\">\n            <a\n                v-if=\"url.length > 0\"\n                :href=\"url\"\n                class=\"venue-link\"\n            >\n                {{ name }}\n            </a>\n            <span v-else>\n                {{ name }}\n            </span>\n        </h2>\n\n        <div class=\"image\">\n            <img\n                v-if=\"bestPhoto.length > 0\"\n                class=\"best-photo\"\n                :src=\"bestPhoto\"\n                :alt=\"`${name} best image`\"\n            >\n            <div\n                v-else\n                class=\"best-photo no-picture-text\"\n            >\n                No picture\n            </div>\n        </div>\n\n        <div class=\"address\">\n            <span\n                v-for=\"addressLine in formattedAddress\"\n                class=\"address-line\"\n            >\n                {{ addressLine }}\n            </span>\n        </div>\n\n        <div v-if=\"!!price\">\n            Price: {{ price }}\n        </div>\n    </div>\n</template>\n\n<script>\nimport { mapState } from 'vuex';\n\nexport default {\n    props: [ 'categories', 'formattedAddress', 'id', 'name' ],\n    computed: {\n        ...mapState('foursquare', {\n            venueDetails (state) {\n                const emptyObj = {\n                    canonicalUrl: '',\n                    price: {},\n                    bestPhoto: {},\n                    mocked: true\n                };\n\n                return typeof state.venueDetails[this.id] != 'undefined' ? state.venueDetails[this.id] : emptyObj\n            }\n        }),\n        price() {\n            return this.venueDetails.price.message || null\n        },\n        url() {\n            return this.venueDetails.canonicalUrl\n        },\n        error() {\n            return this.venueDetails.error || ''\n        },\n        bestPhoto() {\n            return this.createPhotoUrl(this.venueDetails.bestPhoto)\n        }\n    },\n    methods: {\n        createPhotoUrl({ prefix='', suffix='' }) {\n            if (prefix.length == 0) {\n                return ''\n            }\n\n            return `${prefix}300x300${suffix}`;\n        }\n    }\n}\n</script>\n\n<style>\n.venue-card {\n    background: white;\n    box-shadow: 0 0 10px 1px rgba(0,0,0,0.1);\n    padding: 10px;\n    height: 100%;\n    width: 100%;\n    font-family: tahoma;\n    box-sizing: border-box;\n}\n\n.venue-name {\n    margin: 0 0 10px;\n    font-size: 18px;\n    min-height: 2.8em;\n}\n\n.venue-link {\n    color: #000;\n}\n\n.venue-link:visited {\n    color: #444;\n}\n\n.venue-link:hover, .venue-link:active, {\n    color: inherit;\n}\n\n.address {\n    font-size: 14px;\n    margin: 10px 0;\n}\n\n.address-line {\n    display: block;\n}\n\n.best-photo {\n    width: 100%;\n    height: 200px;\n    background-color: #DDD;\n    background-size: cover;\n}\n\n.no-picture-text {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.error {\n    border: 1px solid #F00;\n    background: #f7e9e9;\n    color: #F00;\n    font-family: Tahoma;\n    font-size: 12px;\n    margin: 0 0 5px;\n    padding: 5px;\n}\n</style>\n"]}, media: undefined });
 
     };
     /* scoped */

@@ -1,5 +1,8 @@
 <template>
     <div class="venue-card">
+        <div class="error" v-if="error.length > 0">
+            {{ error }}
+        </div>
         <h2 class="venue-name">
             <a
                 v-if="url.length > 0"
@@ -67,6 +70,9 @@ export default {
         url() {
             return this.venueDetails.canonicalUrl
         },
+        error() {
+            return this.venueDetails.error || ''
+        },
         bestPhoto() {
             return this.createPhotoUrl(this.venueDetails.bestPhoto)
         }
@@ -132,5 +138,15 @@ export default {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.error {
+    border: 1px solid #F00;
+    background: #f7e9e9;
+    color: #F00;
+    font-family: Tahoma;
+    font-size: 12px;
+    margin: 0 0 5px;
+    padding: 5px;
 }
 </style>

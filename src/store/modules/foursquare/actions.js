@@ -73,33 +73,60 @@ export default {
 
         state.venueResults.forEach(({id}) => {
             if (typeof state.venueDetails[id] == 'undefined') { // memory cache, could also use session
-                // const {
-                //     canonicalUrl,
-                //     price,
-                //     bestPhoto,
-                // } = getMockedDetails();
+                if (shouldUseMocked()) {
+                    const {
+                        canonicalUrl,
+                        price,
+                        bestPhoto,
+                    } = getMockedDetails();
 
-                // commit('addVenueDetails', {
-                //     id,
-                //     canonicalUrl,
-                //     price,
-                //     bestPhoto,
-                //     mocked: true
-                // })
+                    commit('addVenueDetails', {
+                        id,
+                        canonicalUrl,
+                        price,
+                        bestPhoto,
+                        mocked: true
+                    })
+                } else {
+                    axios.get(`https://api.foursquare.com/v2/venues/${id}`, {
+                        params: {
+                            client_id,
+                            client_secret,
+                            v: formatDateTimeStamp(),
+                        }
+                    })
+                    .then(function ({ data }) {
+                        const {
+                            canonicalUrl,
+                            price,
+                            bestPhoto
+                        } = data.response.venue
 
-                axios.get(`https://api.foursquare.com/v2/venues/${id}`, {
-                    params: {
-                        client_id,
-                        client_secret,
-                        v: formatDateTimeStamp(),
-                    }
-                })
-                .then(function ({ data }) {
-                    console.log(data)
-                })
-                .catch(function (error) {
-                    console.log(error);
-                })
+                        commit('addVenueDetails', {
+                            id,
+                            canonicalUrl,
+                            price,
+                            bestPhoto,
+                            mocked: true
+                        })
+                    })
+                    .catch(function (error) {
+                        const { response } = error;
+                        if (response.status) {
+                            commit('addVenueDetails', {
+                                id,
+                                canonicalUrl: '',
+                                price: {},
+                                bestPhoto: {},
+                                mocked: true,
+                                error: 'Error Too many Requests'
+                            })
+                        } else {
+                            console.log(error);
+                        }
+                    })
+                }
+
             }
         })
     }
@@ -149,4 +176,16 @@ function getCategories(categories) {
 
 function getMockedDetails() {
     return mockedDetails.venue;
+}
+
+function shouldUseMocked() {
+    const queryString = window.location.search.substring(1).split('&').reduce((prev, cur) => {
+        const [ key, value ] = cur.split('=');
+
+        prev[key] = value;
+
+        return prev;
+    }, {});
+
+    return queryString.mock == 1;
 }
