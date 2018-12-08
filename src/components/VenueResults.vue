@@ -1,32 +1,34 @@
 <template>
-    <!-- requestStatus: 'idle', // idle, done, loading, error -->
-    <div v-if="requestStatus == 'idle'">
-        Click the button to check venues neaby. Your location will be requested.
-    </div>
-    <div v-else-if="requestStatus == 'loading'">
-        Loading results...
-    </div>
-    <div v-else-if="requestStatus == 'done'">
-        <ul
-            v-if="filteredResults.length > 0"
-            class="venue-list"
-        >
-            <li
-                v-for="(venue, index) in filteredResults"
-                class="venue-item"
+    <div>
+        <div v-if="errorMessage.length > 0" class="error">
+            {{ errorMessage }}
+        </div>
+        <!-- requestStatus: 'idle', // idle, done, loading, error -->
+        <div v-if="requestStatus == 'idle'">
+            Click the button to check venues neaby. Your location will be requested.
+        </div>
+        <div v-else-if="requestStatus == 'loading'">
+            Loading results...
+        </div>
+        <div v-else-if="requestStatus == 'done'">
+            <ul
+                v-if="filteredResults.length > 0"
+                class="venue-list"
             >
-                <VenueCard
-                    :key="index"
-                    v-bind="venue"
-                />
-            </li>
-        </ul>
-        <p v-else>
-            No results yet
-        </p>
-    </div>
-    <div v-else>
-        An error ocurred, please try again.
+                <li
+                    v-for="(venue, index) in filteredResults"
+                    class="venue-item"
+                >
+                    <VenueCard
+                        :key="index"
+                        v-bind="venue"
+                    />
+                </li>
+            </ul>
+            <p v-else>
+                No results yet
+            </p>
+        </div>
     </div>
 </template>
 
@@ -39,7 +41,7 @@ export default {
         VenueCard
     },
     computed: {
-        ...mapState('foursquare', ['requestStatus']),
+        ...mapState('foursquare', ['requestStatus', 'errorMessage']),
         ...mapGetters('foursquare', ['filteredResults']),
     }
 

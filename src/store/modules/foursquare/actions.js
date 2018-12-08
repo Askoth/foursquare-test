@@ -112,6 +112,10 @@ export default {
                     })
                     .catch(function (error) {
                         const { response } = error;
+                        commit('updateErrorMessage', {
+                            status: response.status,
+                            message: error.message
+                        });
                         if (response.status) {
                             commit('addVenueDetails', {
                                 id,

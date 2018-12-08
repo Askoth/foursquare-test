@@ -140,13 +140,4 @@ export default {
     justify-content: center;
 }
 
-.error {
-    border: 1px solid #F00;
-    background: #f7e9e9;
-    color: #F00;
-    font-family: Tahoma;
-    font-size: 12px;
-    margin: 0 0 5px;
-    padding: 5px;
-}
 </style>

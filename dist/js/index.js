@@ -10854,6 +10854,10 @@
                       })
                       .catch(function (error) {
                           var response = error.response;
+                          commit('updateErrorMessage', {
+                              status: response.status,
+                              message: error.message
+                          });
                           if (response.status) {
                               commit('addVenueDetails', {
                                   id: id,
@@ -10970,7 +10974,14 @@
               ( obj$1 = {}, obj$1[obj.id] = obj, obj$1 ));
 
           state.venueDetails = newValue;
+      },
+      updateErrorMessage: function updateErrorMessage(state, ref) {
+          var status = ref.status;
+          var message = ref.message;
+
+          state.errorMessage = "[Error " + status + "] " + message + ", Try adding 'mocked=1' parameter to the url.";
       }
+
   };
 
   var getters = {
@@ -11328,7 +11339,7 @@
     /* style */
     var __vue_inject_styles__$1 = function (inject) {
       if (!inject) { return }
-      inject("data-v-b84889ac_0", { source: "\n.venue-card {\n    background: white;\n    box-shadow: 0 0 10px 1px rgba(0,0,0,0.1);\n    padding: 10px;\n    height: 100%;\n    width: 100%;\n    font-family: tahoma;\n    box-sizing: border-box;\n}\n.venue-name {\n    margin: 0 0 10px;\n    font-size: 18px;\n    min-height: 2.8em;\n}\n.venue-link {\n    color: #000;\n}\n.venue-link:visited {\n    color: #444;\n}\n.venue-link:hover, .venue-link:active, {\n    color: inherit;\n}\n.address {\n    font-size: 14px;\n    margin: 10px 0;\n}\n.address-line {\n    display: block;\n}\n.best-photo {\n    width: 100%;\n    height: 200px;\n    background-color: #DDD;\n    background-size: cover;\n}\n.no-picture-text {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n.error {\n    border: 1px solid #F00;\n    background: #f7e9e9;\n    color: #F00;\n    font-family: Tahoma;\n    font-size: 12px;\n    margin: 0 0 5px;\n    padding: 5px;\n}\n", map: {"version":3,"sources":["/Users/marcelo/Projects/foursquare-test/src/components/VenueCard.vue"],"names":[],"mappings":";AA4FA;IACA,kBAAA;IACA,yCAAA;IACA,cAAA;IACA,aAAA;IACA,YAAA;IACA,oBAAA;IACA,uBAAA;CACA;AAEA;IACA,iBAAA;IACA,gBAAA;IACA,kBAAA;CACA;AAEA;IACA,YAAA;CACA;AAEA;IACA,YAAA;CACA;AAEA;IACA,eAAA;CACA;AAEA;IACA,gBAAA;IACA,eAAA;CACA;AAEA;IACA,eAAA;CACA;AAEA;IACA,YAAA;IACA,cAAA;IACA,uBAAA;IACA,uBAAA;CACA;AAEA;IACA,cAAA;IACA,oBAAA;IACA,wBAAA;CACA;AAEA;IACA,uBAAA;IACA,oBAAA;IACA,YAAA;IACA,oBAAA;IACA,gBAAA;IACA,gBAAA;IACA,aAAA;CACA","file":"VenueCard.vue","sourcesContent":["<template>\n    <div class=\"venue-card\">\n        <div class=\"error\" v-if=\"error.length > 0\">\n            {{ error }}\n        </div>\n        <h2 class=\"venue-name\">\n            <a\n                v-if=\"url.length > 0\"\n                :href=\"url\"\n                class=\"venue-link\"\n            >\n                {{ name }}\n            </a>\n            <span v-else>\n                {{ name }}\n            </span>\n        </h2>\n\n        <div class=\"image\">\n            <img\n                v-if=\"bestPhoto.length > 0\"\n                class=\"best-photo\"\n                :src=\"bestPhoto\"\n                :alt=\"`${name} best image`\"\n            >\n            <div\n                v-else\n                class=\"best-photo no-picture-text\"\n            >\n                No picture\n            </div>\n        </div>\n\n        <div class=\"address\">\n            <span\n                v-for=\"addressLine in formattedAddress\"\n                class=\"address-line\"\n            >\n                {{ addressLine }}\n            </span>\n        </div>\n\n        <div v-if=\"!!price\">\n            Price: {{ price }}\n        </div>\n    </div>\n</template>\n\n<script>\nimport { mapState } from 'vuex';\n\nexport default {\n    props: [ 'categories', 'formattedAddress', 'id', 'name' ],\n    computed: {\n        ...mapState('foursquare', {\n            venueDetails (state) {\n                const emptyObj = {\n                    canonicalUrl: '',\n                    price: {},\n                    bestPhoto: {},\n                    mocked: true\n                };\n\n                return typeof state.venueDetails[this.id] != 'undefined' ? state.venueDetails[this.id] : emptyObj\n            }\n        }),\n        price() {\n            return this.venueDetails.price.message || null\n        },\n        url() {\n            return this.venueDetails.canonicalUrl\n        },\n        error() {\n            return this.venueDetails.error || ''\n        },\n        bestPhoto() {\n            return this.createPhotoUrl(this.venueDetails.bestPhoto)\n        }\n    },\n    methods: {\n        createPhotoUrl({ prefix='', suffix='' }) {\n            if (prefix.length == 0) {\n                return ''\n            }\n\n            return `${prefix}300x300${suffix}`;\n        }\n    }\n}\n</script>\n\n<style>\n.venue-card {\n    background: white;\n    box-shadow: 0 0 10px 1px rgba(0,0,0,0.1);\n    padding: 10px;\n    height: 100%;\n    width: 100%;\n    font-family: tahoma;\n    box-sizing: border-box;\n}\n\n.venue-name {\n    margin: 0 0 10px;\n    font-size: 18px;\n    min-height: 2.8em;\n}\n\n.venue-link {\n    color: #000;\n}\n\n.venue-link:visited {\n    color: #444;\n}\n\n.venue-link:hover, .venue-link:active, {\n    color: inherit;\n}\n\n.address {\n    font-size: 14px;\n    margin: 10px 0;\n}\n\n.address-line {\n    display: block;\n}\n\n.best-photo {\n    width: 100%;\n    height: 200px;\n    background-color: #DDD;\n    background-size: cover;\n}\n\n.no-picture-text {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n.error {\n    border: 1px solid #F00;\n    background: #f7e9e9;\n    color: #F00;\n    font-family: Tahoma;\n    font-size: 12px;\n    margin: 0 0 5px;\n    padding: 5px;\n}\n</style>\n"]}, media: undefined });
+      inject("data-v-3baba1ad_0", { source: "\n.venue-card {\n    background: white;\n    box-shadow: 0 0 10px 1px rgba(0,0,0,0.1);\n    padding: 10px;\n    height: 100%;\n    width: 100%;\n    font-family: tahoma;\n    box-sizing: border-box;\n}\n.venue-name {\n    margin: 0 0 10px;\n    font-size: 18px;\n    min-height: 2.8em;\n}\n.venue-link {\n    color: #000;\n}\n.venue-link:visited {\n    color: #444;\n}\n.venue-link:hover, .venue-link:active, {\n    color: inherit;\n}\n.address {\n    font-size: 14px;\n    margin: 10px 0;\n}\n.address-line {\n    display: block;\n}\n.best-photo {\n    width: 100%;\n    height: 200px;\n    background-color: #DDD;\n    background-size: cover;\n}\n.no-picture-text {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n", map: {"version":3,"sources":["/Users/marcelo/Projects/foursquare-test/src/components/VenueCard.vue"],"names":[],"mappings":";AA4FA;IACA,kBAAA;IACA,yCAAA;IACA,cAAA;IACA,aAAA;IACA,YAAA;IACA,oBAAA;IACA,uBAAA;CACA;AAEA;IACA,iBAAA;IACA,gBAAA;IACA,kBAAA;CACA;AAEA;IACA,YAAA;CACA;AAEA;IACA,YAAA;CACA;AAEA;IACA,eAAA;CACA;AAEA;IACA,gBAAA;IACA,eAAA;CACA;AAEA;IACA,eAAA;CACA;AAEA;IACA,YAAA;IACA,cAAA;IACA,uBAAA;IACA,uBAAA;CACA;AAEA;IACA,cAAA;IACA,oBAAA;IACA,wBAAA;CACA","file":"VenueCard.vue","sourcesContent":["<template>\n    <div class=\"venue-card\">\n        <div class=\"error\" v-if=\"error.length > 0\">\n            {{ error }}\n        </div>\n        <h2 class=\"venue-name\">\n            <a\n                v-if=\"url.length > 0\"\n                :href=\"url\"\n                class=\"venue-link\"\n            >\n                {{ name }}\n            </a>\n            <span v-else>\n                {{ name }}\n            </span>\n        </h2>\n\n        <div class=\"image\">\n            <img\n                v-if=\"bestPhoto.length > 0\"\n                class=\"best-photo\"\n                :src=\"bestPhoto\"\n                :alt=\"`${name} best image`\"\n            >\n            <div\n                v-else\n                class=\"best-photo no-picture-text\"\n            >\n                No picture\n            </div>\n        </div>\n\n        <div class=\"address\">\n            <span\n                v-for=\"addressLine in formattedAddress\"\n                class=\"address-line\"\n            >\n                {{ addressLine }}\n            </span>\n        </div>\n\n        <div v-if=\"!!price\">\n            Price: {{ price }}\n        </div>\n    </div>\n</template>\n\n<script>\nimport { mapState } from 'vuex';\n\nexport default {\n    props: [ 'categories', 'formattedAddress', 'id', 'name' ],\n    computed: {\n        ...mapState('foursquare', {\n            venueDetails (state) {\n                const emptyObj = {\n                    canonicalUrl: '',\n                    price: {},\n                    bestPhoto: {},\n                    mocked: true\n                };\n\n                return typeof state.venueDetails[this.id] != 'undefined' ? state.venueDetails[this.id] : emptyObj\n            }\n        }),\n        price() {\n            return this.venueDetails.price.message || null\n        },\n        url() {\n            return this.venueDetails.canonicalUrl\n        },\n        error() {\n            return this.venueDetails.error || ''\n        },\n        bestPhoto() {\n            return this.createPhotoUrl(this.venueDetails.bestPhoto)\n        }\n    },\n    methods: {\n        createPhotoUrl({ prefix='', suffix='' }) {\n            if (prefix.length == 0) {\n                return ''\n            }\n\n            return `${prefix}300x300${suffix}`;\n        }\n    }\n}\n</script>\n\n<style>\n.venue-card {\n    background: white;\n    box-shadow: 0 0 10px 1px rgba(0,0,0,0.1);\n    padding: 10px;\n    height: 100%;\n    width: 100%;\n    font-family: tahoma;\n    box-sizing: border-box;\n}\n\n.venue-name {\n    margin: 0 0 10px;\n    font-size: 18px;\n    min-height: 2.8em;\n}\n\n.venue-link {\n    color: #000;\n}\n\n.venue-link:visited {\n    color: #444;\n}\n\n.venue-link:hover, .venue-link:active, {\n    color: inherit;\n}\n\n.address {\n    font-size: 14px;\n    margin: 10px 0;\n}\n\n.address-line {\n    display: block;\n}\n\n.best-photo {\n    width: 100%;\n    height: 200px;\n    background-color: #DDD;\n    background-size: cover;\n}\n\n.no-picture-text {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n}\n\n</style>\n"]}, media: undefined });
 
     };
     /* scoped */
@@ -11462,7 +11473,7 @@
       components: {
           VenueCard: VenueCard
       },
-      computed: Object.assign({}, mapState('foursquare', ['requestStatus']),
+      computed: Object.assign({}, mapState('foursquare', ['requestStatus', 'errorMessage']),
           mapGetters('foursquare', ['filteredResults']))
 
   };
@@ -11475,37 +11486,45 @@
     var _vm = this;
     var _h = _vm.$createElement;
     var _c = _vm._self._c || _h;
-    return _vm.requestStatus == "idle"
-      ? _c("div", [
-          _vm._v(
-            "\n    Click the button to check venues neaby. Your location will be requested.\n"
-          )
-        ])
-      : _vm.requestStatus == "loading"
-        ? _c("div", [_vm._v("\n    Loading results...\n")])
-        : _vm.requestStatus == "done"
-          ? _c("div", [
-              _vm.filteredResults.length > 0
-                ? _c(
-                    "ul",
-                    { staticClass: "venue-list" },
-                    _vm._l(_vm.filteredResults, function(venue, index) {
-                      return _c(
-                        "li",
-                        { staticClass: "venue-item" },
-                        [
-                          _c(
-                            "VenueCard",
-                            _vm._b({ key: index }, "VenueCard", venue, false)
-                          )
-                        ],
-                        1
-                      )
-                    })
-                  )
-                : _c("p", [_vm._v("\n        No results yet\n    ")])
-            ])
-          : _c("div", [_vm._v("\n    An error ocurred, please try again.\n")])
+    return _c("div", [
+      _vm.errorMessage.length > 0
+        ? _c("div", { staticClass: "error" }, [
+            _vm._v("\n        " + _vm._s(_vm.errorMessage) + "\n    ")
+          ])
+        : _vm._e(),
+      _vm._v(" "),
+      _vm.requestStatus == "idle"
+        ? _c("div", [
+            _vm._v(
+              "\n        Click the button to check venues neaby. Your location will be requested.\n    "
+            )
+          ])
+        : _vm.requestStatus == "loading"
+          ? _c("div", [_vm._v("\n        Loading results...\n    ")])
+          : _vm.requestStatus == "done"
+            ? _c("div", [
+                _vm.filteredResults.length > 0
+                  ? _c(
+                      "ul",
+                      { staticClass: "venue-list" },
+                      _vm._l(_vm.filteredResults, function(venue, index) {
+                        return _c(
+                          "li",
+                          { staticClass: "venue-item" },
+                          [
+                            _c(
+                              "VenueCard",
+                              _vm._b({ key: index }, "VenueCard", venue, false)
+                            )
+                          ],
+                          1
+                        )
+                      })
+                    )
+                  : _c("p", [_vm._v("\n            No results yet\n        ")])
+              ])
+            : _vm._e()
+    ])
   };
   var __vue_staticRenderFns__$2 = [];
   __vue_render__$2._withStripped = true;
@@ -11513,7 +11532,7 @@
     /* style */
     var __vue_inject_styles__$2 = function (inject) {
       if (!inject) { return }
-      inject("data-v-147821da_0", { source: "\n.venue-list {\n    display: flex;\n    flex-wrap: wrap;\n}\n.venue-item {\n    width: 200px;\n    margin: 10px;\n    min-height: 300px;\n}\n", map: {"version":3,"sources":["/Users/marcelo/Projects/foursquare-test/src/components/VenueResults.vue"],"names":[],"mappings":";AAkDA;IACA,cAAA;IACA,gBAAA;CACA;AAEA;IACA,aAAA;IACA,aAAA;IACA,kBAAA;CACA","file":"VenueResults.vue","sourcesContent":["<template>\n    <!-- requestStatus: 'idle', // idle, done, loading, error -->\n    <div v-if=\"requestStatus == 'idle'\">\n        Click the button to check venues neaby. Your location will be requested.\n    </div>\n    <div v-else-if=\"requestStatus == 'loading'\">\n        Loading results...\n    </div>\n    <div v-else-if=\"requestStatus == 'done'\">\n        <ul\n            v-if=\"filteredResults.length > 0\"\n            class=\"venue-list\"\n        >\n            <li\n                v-for=\"(venue, index) in filteredResults\"\n                class=\"venue-item\"\n            >\n                <VenueCard\n                    :key=\"index\"\n                    v-bind=\"venue\"\n                />\n            </li>\n        </ul>\n        <p v-else>\n            No results yet\n        </p>\n    </div>\n    <div v-else>\n        An error ocurred, please try again.\n    </div>\n</template>\n\n<script>\nimport { mapGetters, mapState } from 'vuex';\nimport VenueCard from '@components/VenueCard.vue';\n\nexport default {\n    components: {\n        VenueCard\n    },\n    computed: {\n        ...mapState('foursquare', ['requestStatus']),\n        ...mapGetters('foursquare', ['filteredResults']),\n    }\n\n}\n\n</script>\n\n<style>\n.venue-list {\n    display: flex;\n    flex-wrap: wrap;\n}\n\n.venue-item {\n    width: 200px;\n    margin: 10px;\n    min-height: 300px;\n}\n</style>\n"]}, media: undefined });
+      inject("data-v-e94efffa_0", { source: "\n.venue-list {\n    display: flex;\n    flex-wrap: wrap;\n}\n.venue-item {\n    width: 200px;\n    margin: 10px;\n    min-height: 300px;\n}\n", map: {"version":3,"sources":["/Users/marcelo/Projects/foursquare-test/src/components/VenueResults.vue"],"names":[],"mappings":";AAoDA;IACA,cAAA;IACA,gBAAA;CACA;AAEA;IACA,aAAA;IACA,aAAA;IACA,kBAAA;CACA","file":"VenueResults.vue","sourcesContent":["<template>\n    <div>\n        <div v-if=\"errorMessage.length > 0\" class=\"error\">\n            {{ errorMessage }}\n        </div>\n        <!-- requestStatus: 'idle', // idle, done, loading, error -->\n        <div v-if=\"requestStatus == 'idle'\">\n            Click the button to check venues neaby. Your location will be requested.\n        </div>\n        <div v-else-if=\"requestStatus == 'loading'\">\n            Loading results...\n        </div>\n        <div v-else-if=\"requestStatus == 'done'\">\n            <ul\n                v-if=\"filteredResults.length > 0\"\n                class=\"venue-list\"\n            >\n                <li\n                    v-for=\"(venue, index) in filteredResults\"\n                    class=\"venue-item\"\n                >\n                    <VenueCard\n                        :key=\"index\"\n                        v-bind=\"venue\"\n                    />\n                </li>\n            </ul>\n            <p v-else>\n                No results yet\n            </p>\n        </div>\n    </div>\n</template>\n\n<script>\nimport { mapGetters, mapState } from 'vuex';\nimport VenueCard from '@components/VenueCard.vue';\n\nexport default {\n    components: {\n        VenueCard\n    },\n    computed: {\n        ...mapState('foursquare', ['requestStatus', 'errorMessage']),\n        ...mapGetters('foursquare', ['filteredResults']),\n    }\n\n}\n\n</script>\n\n<style>\n.venue-list {\n    display: flex;\n    flex-wrap: wrap;\n}\n\n.venue-item {\n    width: 200px;\n    margin: 10px;\n    min-height: 300px;\n}\n</style>\n"]}, media: undefined });
 
     };
     /* scoped */
@@ -11682,7 +11701,7 @@
     /* style */
     var __vue_inject_styles__$3 = function (inject) {
       if (!inject) { return }
-      inject("data-v-b5e79f2e_0", { source: "\nhtml, body {\n    margin: 0;\n    padding: 0;\n}\nul, li {\n    list-style-type: none;\n    padding: 0;\n    margin: 0;\n}\n:root {\n    --header-color: #00113d;\n    --controls-color: #0732a2;\n    --venue-color: #efeff4;\n    --title-color: #efefef;\n    --padding: 10px;\n}\n.app {\n    display: grid;\n    grid-template-columns: auto 370px;\n    grid-template-rows: min-content auto;\n    grid-template-areas:\n    \"grid-header grid-header\"\n    \"grid-venues grid-controls\";\n        height: 100vh;\n}\n.header {\n    grid-area: grid-header;\n    background: var(--header-color);\n    margin: 0;\n    color: var(--title-color);\n    font-family: Tahoma;\n    padding: var(--padding);\n    font-size: 25px;\n}\n.controls {\n    grid-area: grid-controls;\n    background: var(--controls-color);\n    padding: var(--padding);\n}\n.venues {\n    grid-area: grid-venues;\n    background: var(--venue-color);\n    padding: var(--padding);\n}\n\n", map: {"version":3,"sources":["/Users/marcelo/Projects/foursquare-test/src/main.vue"],"names":[],"mappings":";AA2BA;IACA,UAAA;IACA,WAAA;CACA;AAEA;IACA,sBAAA;IACA,WAAA;IACA,UAAA;CACA;AAEA;IACA,wBAAA;IACA,0BAAA;IACA,uBAAA;IACA,uBAAA;IACA,gBAAA;CACA;AAEA;IACA,cAAA;IACA,kCAAA;IACA,qCAAA;IACA;;gCAEA;QACA,cAAA;CACA;AAEA;IACA,uBAAA;IACA,gCAAA;IACA,UAAA;IACA,0BAAA;IACA,oBAAA;IACA,wBAAA;IACA,gBAAA;CACA;AAEA;IACA,yBAAA;IACA,kCAAA;IACA,wBAAA;CACA;AAEA;IACA,uBAAA;IACA,+BAAA;IACA,wBAAA;CACA","file":"main.vue","sourcesContent":["<template>\n    <div class=\"app\">\n        <h1 class=\"header\">My Awesome App</h1>\n        <HeaderControls class=\"controls\" />\n        <VenueResults class=\"venues\" />\n    </div>\n</template>\n\n<script>\nimport HeaderControls from '@components/HeaderControls.vue';\nimport VenueResults from '@components/VenueResults.vue';\n\n\nexport default {\n    components: {\n        HeaderControls,\n        VenueResults\n    },\n    data () {\n        return {\n        }\n    }\n}\n</script>\n\n<style>\n\nhtml, body {\n    margin: 0;\n    padding: 0;\n}\n\nul, li {\n    list-style-type: none;\n    padding: 0;\n    margin: 0;\n}\n\n:root {\n    --header-color: #00113d;\n    --controls-color: #0732a2;\n    --venue-color: #efeff4;\n    --title-color: #efefef;\n    --padding: 10px;\n}\n\n.app {\n    display: grid;\n    grid-template-columns: auto 370px;\n    grid-template-rows: min-content auto;\n    grid-template-areas:\n    \"grid-header grid-header\"\n    \"grid-venues grid-controls\";\n        height: 100vh;\n}\n\n.header {\n    grid-area: grid-header;\n    background: var(--header-color);\n    margin: 0;\n    color: var(--title-color);\n    font-family: Tahoma;\n    padding: var(--padding);\n    font-size: 25px;\n}\n\n.controls {\n    grid-area: grid-controls;\n    background: var(--controls-color);\n    padding: var(--padding);\n}\n\n.venues {\n    grid-area: grid-venues;\n    background: var(--venue-color);\n    padding: var(--padding);\n}\n\n</style>\n"]}, media: undefined });
+      inject("data-v-34522224_0", { source: "\nhtml, body {\n    margin: 0;\n    padding: 0;\n}\nul, li {\n    list-style-type: none;\n    padding: 0;\n    margin: 0;\n}\n:root {\n    --header-color: #00113d;\n    --controls-color: #0732a2;\n    --venue-color: #efeff4;\n    --title-color: #efefef;\n    --padding: 10px;\n}\n.app {\n    display: grid;\n    grid-template-columns: auto 370px;\n    grid-template-rows: min-content auto;\n    grid-template-areas:\n    \"grid-header grid-header\"\n    \"grid-venues grid-controls\";\n        height: 100vh;\n}\n.header {\n    grid-area: grid-header;\n    background: var(--header-color);\n    margin: 0;\n    color: var(--title-color);\n    font-family: Tahoma;\n    padding: var(--padding);\n    font-size: 25px;\n}\n.controls {\n    grid-area: grid-controls;\n    background: var(--controls-color);\n    padding: var(--padding);\n}\n.venues {\n    grid-area: grid-venues;\n    background: var(--venue-color);\n    padding: var(--padding);\n}\n.error {\n    border: 1px solid #F00;\n    background: #f7e9e9;\n    color: #F00;\n    font-family: Tahoma;\n    font-size: 12px;\n    margin: 0 0 5px;\n    padding: 5px;\n}\n\n", map: {"version":3,"sources":["/Users/marcelo/Projects/foursquare-test/src/main.vue"],"names":[],"mappings":";AA2BA;IACA,UAAA;IACA,WAAA;CACA;AAEA;IACA,sBAAA;IACA,WAAA;IACA,UAAA;CACA;AAEA;IACA,wBAAA;IACA,0BAAA;IACA,uBAAA;IACA,uBAAA;IACA,gBAAA;CACA;AAEA;IACA,cAAA;IACA,kCAAA;IACA,qCAAA;IACA;;gCAEA;QACA,cAAA;CACA;AAEA;IACA,uBAAA;IACA,gCAAA;IACA,UAAA;IACA,0BAAA;IACA,oBAAA;IACA,wBAAA;IACA,gBAAA;CACA;AAEA;IACA,yBAAA;IACA,kCAAA;IACA,wBAAA;CACA;AAEA;IACA,uBAAA;IACA,+BAAA;IACA,wBAAA;CACA;AAEA;IACA,uBAAA;IACA,oBAAA;IACA,YAAA;IACA,oBAAA;IACA,gBAAA;IACA,gBAAA;IACA,aAAA;CACA","file":"main.vue","sourcesContent":["<template>\n    <div class=\"app\">\n        <h1 class=\"header\">My Awesome App</h1>\n        <HeaderControls class=\"controls\" />\n        <VenueResults class=\"venues\" />\n    </div>\n</template>\n\n<script>\nimport HeaderControls from '@components/HeaderControls.vue';\nimport VenueResults from '@components/VenueResults.vue';\n\n\nexport default {\n    components: {\n        HeaderControls,\n        VenueResults\n    },\n    data () {\n        return {\n        }\n    }\n}\n</script>\n\n<style>\n\nhtml, body {\n    margin: 0;\n    padding: 0;\n}\n\nul, li {\n    list-style-type: none;\n    padding: 0;\n    margin: 0;\n}\n\n:root {\n    --header-color: #00113d;\n    --controls-color: #0732a2;\n    --venue-color: #efeff4;\n    --title-color: #efefef;\n    --padding: 10px;\n}\n\n.app {\n    display: grid;\n    grid-template-columns: auto 370px;\n    grid-template-rows: min-content auto;\n    grid-template-areas:\n    \"grid-header grid-header\"\n    \"grid-venues grid-controls\";\n        height: 100vh;\n}\n\n.header {\n    grid-area: grid-header;\n    background: var(--header-color);\n    margin: 0;\n    color: var(--title-color);\n    font-family: Tahoma;\n    padding: var(--padding);\n    font-size: 25px;\n}\n\n.controls {\n    grid-area: grid-controls;\n    background: var(--controls-color);\n    padding: var(--padding);\n}\n\n.venues {\n    grid-area: grid-venues;\n    background: var(--venue-color);\n    padding: var(--padding);\n}\n\n.error {\n    border: 1px solid #F00;\n    background: #f7e9e9;\n    color: #F00;\n    font-family: Tahoma;\n    font-size: 12px;\n    margin: 0 0 5px;\n    padding: 5px;\n}\n\n</style>\n"]}, media: undefined });
 
     };
     /* scoped */
