@@ -1,3 +1,4 @@
+import Vue from 'vue';
 export default {
     geolocatonSupport(state, { value }) {
         state.geolocatonSupport = value;
@@ -12,5 +13,13 @@ export default {
     },
     updateEnabledCategories(state, value) {
         state.enabledCategories = value
+    },
+    addVenueDetails(state, obj) {
+        const newValue = {
+            ...state.venueDetails,
+            [obj.id]: obj
+        };
+
+        state.venueDetails = newValue
     }
 }

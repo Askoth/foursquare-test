@@ -1,6 +1,6 @@
 <template>
     <div class="app">
-        <div class="header">My Awesome App</div>
+        <h1 class="header">My Awesome App</h1>
         <HeaderControls class="controls" />
         <VenueResults class="venues" />
     </div>
@@ -57,6 +57,7 @@ ul, li {
 .header {
     grid-area: grid-header;
     background: var(--header-color);
+    margin: 0;
     color: var(--title-color);
     font-family: Tahoma;
     padding: var(--padding);

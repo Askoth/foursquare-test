@@ -1,4 +1,5 @@
 import axios from 'axios';
+import mockedDetails from '@store/modules/foursquare/mocked-details.json';
 
 const client_id='TWUYXKEMJEFTLQB3VP1OYUFAWV3BFL2NRL3HSTM5L2ULROZR';
 const client_secret='QRSFUHAXZKQEILJ1XL0OIDYOICOYBKYSYBZ3WF4IID5Y2BDZ';
@@ -67,21 +68,39 @@ export default {
         })
     },
     fetchVenueDetails({ commit, state, getters, dispatch }) {
+
+        // this foursquare has a very low limit
+
         state.venueResults.forEach(({id}) => {
-            axios.get(`https://api.foursquare.com/v2/venues/${id}`, {
-                params: {
-                    client_id,
-                    client_secret,
-                    v: formatDateTimeStamp(),
-                }
-            })
-            .then(function ({ data }) {
-                console.log(data)
-            })
-            .catch(function (error) {
-                commit('requestStatus', { value: 'error' });
-                console.log(error);
-            })
+            if (typeof state.venueDetails[id] == 'undefined') { // memory cache, could also use session
+                // const {
+                //     canonicalUrl,
+                //     price,
+                //     bestPhoto,
+                // } = getMockedDetails();
+
+                // commit('addVenueDetails', {
+                //     id,
+                //     canonicalUrl,
+                //     price,
+                //     bestPhoto,
+                //     mocked: true
+                // })
+
+                axios.get(`https://api.foursquare.com/v2/venues/${id}`, {
+                    params: {
+                        client_id,
+                        client_secret,
+                        v: formatDateTimeStamp(),
+                    }
+                })
+                .then(function ({ data }) {
+                    console.log(data)
+                })
+                .catch(function (error) {
+                    console.log(error);
+                })
+            }
         })
     }
 }
@@ -125,4 +144,9 @@ function getCategories(categories) {
     })
 
     return categoriesById
+}
+
+
+function getMockedDetails() {
+    return mockedDetails.venue;
 }
