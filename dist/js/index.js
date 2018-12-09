@@ -10979,7 +10979,7 @@
           var status = ref.status;
           var message = ref.message;
 
-          state.errorMessage = "[Error " + status + "] " + message + ", Try adding 'mocked=1' parameter to the url.";
+          state.errorMessage = "[Error " + status + "] " + message + ", Try adding 'mock=1' parameter to the url.";
       }
 
   };
