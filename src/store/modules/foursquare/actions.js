@@ -82,9 +82,9 @@ export default {
 
                     commit('addVenueDetails', {
                         id,
-                        canonicalUrl,
-                        price,
-                        bestPhoto,
+                        canonicalUrl: canonicalUrl || '',
+                        price: price || {},
+                        bestPhoto: bestPhoto || {},
                         mocked: true
                     })
                 } else {
@@ -104,9 +104,9 @@ export default {
 
                         commit('addVenueDetails', {
                             id,
-                            canonicalUrl,
-                            price,
-                            bestPhoto,
+                            canonicalUrl: canonicalUrl || '',
+                            price: price || {},
+                            bestPhoto: bestPhoto || {},
                             mocked: true
                         })
                     })
